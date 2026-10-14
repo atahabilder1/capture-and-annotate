@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Capture and Annotate – Screenshot to PDF & Image",
+  "short_name": "CapAnnotate",
+  "version": "0.1.0",
+  "description": "Capture a selected area, the visible screen or a full page. Edit, then save as PNG, JPG or PDF. Works offline.",
+  "minimum_chrome_version": "116",
+  "permissions": ["activeTab", "scripting"],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Capture and Annotate",
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "commands": {
+    "capture-area": {
+      "suggested_key": { "default": "Ctrl+Shift+S", "mac": "Command+Shift+S" },
+      "description": "Select an area to capture"
+    },
+    "capture-visible": {
+      "description": "Capture the visible part of the page"
+    },
+    "capture-full": {
+      "description": "Capture the full page"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
