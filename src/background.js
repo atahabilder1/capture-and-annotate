@@ -113,7 +113,8 @@ async function captureFullPage(tab, hideSticky) {
   } finally {
     await exec(tab, restorePage).catch(() => {});
   }
-  await openEditor(tab, { mode: 'full', tiles, viewWidth: page.viewWidth, viewHeight: page.viewHeight });
+  // `clip` is set when an inner panel was scrolled instead of the page: only that part of each tile is kept.
+  await openEditor(tab, { mode: 'full', tiles, viewWidth: page.viewWidth, viewHeight: page.viewHeight, clip: page.clip });
 }
 
 async function captureTab(windowId) {
@@ -157,6 +158,8 @@ function sleep(ms) {
 
 // ---- Functions below are injected into the page; they must be self-contained. ----
 
+// Works out what to scroll: the page itself, or, in apps like Gmail or Slack where the
+// page doesn't scroll, the largest visible panel with its own scrollbar.
 async function preparePage() {
   const style = document.createElement('style');
   style.id = '__capannotate_style';
@@ -164,11 +167,52 @@ async function preparePage() {
     'html,body{scrollbar-width:none!important;scroll-behavior:auto!important}' +
     '::-webkit-scrollbar{display:none!important}';
   document.documentElement.appendChild(style);
-  window.__capannotate = { x: window.scrollX, y: window.scrollY, hidden: null };
-  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const state = { x: window.scrollX, y: window.scrollY, hidden: null, el: null };
+  window.__capannotate = state;
+
   const root = document.scrollingElement || document.documentElement;
+  const pageRange = Math.max(root.scrollHeight, document.body ? document.body.scrollHeight : 0) - window.innerHeight;
+  const viewArea = window.innerWidth * window.innerHeight;
+  let best = null;
+  let bestArea = 0;
+  for (const el of document.querySelectorAll('body *')) {
+    if (el.scrollHeight - el.clientHeight < 50 || el.clientHeight < 120) continue;
+    const overflow = getComputedStyle(el).overflowY;
+    if (overflow !== 'auto' && overflow !== 'scroll' && overflow !== 'overlay') continue;
+    const r = el.getBoundingClientRect();
+    const w = Math.min(r.right, window.innerWidth) - Math.max(r.left, 0);
+    const h = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 0);
+    // Skip panels that are mostly off screen.
+    if (w <= 0 || h < el.clientHeight * 0.9) continue;
+    if (w * h > bestArea) {
+      best = el;
+      bestArea = w * h;
+    }
+  }
+  const useInner = best && bestArea > viewArea * 0.25 && best.scrollHeight - best.clientHeight > pageRange;
+  if (useInner) {
+    state.el = best;
+    state.elTop = best.scrollTop;
+    state.elStyle = best.getAttribute('style');
+    best.style.setProperty('scroll-behavior', 'auto', 'important');
+    best.style.setProperty('scrollbar-width', 'none', 'important');
+  }
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+  if (useInner) {
+    const r = best.getBoundingClientRect();
+    const top = Math.max(0, r.top + best.clientTop);
+    const left = Math.max(0, r.left + best.clientLeft);
+    const height = Math.min(best.clientHeight, window.innerHeight - top);
+    return {
+      totalHeight: best.scrollHeight,
+      viewHeight: height,
+      viewWidth: window.innerWidth,
+      clip: { x: left, y: top, width: Math.min(best.clientWidth, window.innerWidth - left), height },
+    };
+  }
   return {
-    totalHeight: Math.max(root.scrollHeight, document.body ? document.body.scrollHeight : 0),
+    totalHeight: pageRange + window.innerHeight,
     viewHeight: window.innerHeight,
     viewWidth: window.innerWidth,
   };
@@ -180,6 +224,8 @@ async function scrollPageTo(y, hideFixed) {
   if (hideFixed && !state.hidden) {
     state.hidden = [];
     for (const el of document.querySelectorAll('body *')) {
+      // Never hide the panel being scrolled, or anything that contains it.
+      if (state.el && el.contains(state.el)) continue;
       const pos = getComputedStyle(el).position;
       if (pos === 'fixed' || pos === 'sticky') {
         state.hidden.push([el, el.style.getPropertyValue('visibility'), el.style.getPropertyPriority('visibility')]);
@@ -187,11 +233,12 @@ async function scrollPageTo(y, hideFixed) {
       }
     }
   }
-  window.scrollTo({ top: y, left: 0, behavior: 'instant' });
+  if (state.el) state.el.scrollTop = y;
+  else window.scrollTo({ top: y, left: 0, behavior: 'instant' });
   // Give lazy-loaded images and scroll effects a moment to settle.
   await new Promise((r) => setTimeout(r, 150));
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-  return window.scrollY;
+  return state.el ? state.el.scrollTop : window.scrollY;
 }
 
 function restorePage() {
@@ -201,6 +248,11 @@ function restorePage() {
     el.style.setProperty('visibility', value, priority);
   }
   document.getElementById('__capannotate_style')?.remove();
+  if (state.el) {
+    if (state.elStyle === null) state.el.removeAttribute('style');
+    else state.el.setAttribute('style', state.elStyle);
+    state.el.scrollTop = state.elTop;
+  }
   window.scrollTo({ top: state.y, left: state.x, behavior: 'instant' });
   delete window.__capannotate;
 }

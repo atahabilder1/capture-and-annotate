@@ -1,11 +1,12 @@
 # Capture and Annotate Privacy Policy
 
-_Last updated: 14 October 2026_
+_Last updated: 15 October 2026_
 
 Capture and Annotate does not collect, store or send any personal data.
 
 - Screenshots are taken and edited entirely on your computer.
 - Images are kept only in the extension's local browser storage, so that reloading the editor tab still works. Only the 10 most recent captures are kept, and older ones are deleted automatically.
+- The editor remembers the last colour and size you used with each tool, in the extension's local browser storage.
 - Your settings (for example your default save format) are stored with your browser's built-in sync, so they follow you to your other browsers if you have browser sync turned on. Settings never include images.
 - Files you save go straight to your own downloads folder.
 - The extension makes no network requests. It has no analytics, no tracking and no accounts.

@@ -3,7 +3,7 @@
   "name": "Capture and Annotate – Screenshot to PDF & Image",
   "short_name": "CapAnnotate",
   "version": "0.2.0",
-  "description": "Capture an area, the visible page, a full page or any window. Annotate with arrows, text, steps and blur, then save as PNG, JPG or PDF.",
+  "description": "Capture an area, a full page or any window. Annotate with arrows, text, steps and blur, then save as PNG, JPG or PDF.",
   "minimum_chrome_version": "116",
   "permissions": ["activeTab", "scripting", "contextMenus", "storage", "clipboardWrite"],
   "background": {

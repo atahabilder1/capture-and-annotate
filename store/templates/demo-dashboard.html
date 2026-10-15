@@ -1,0 +1,99 @@
+<!doctype html>
+<!-- A made-up dashboard used as the page being annotated in the store screenshots. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Q3 Launch Plan – Dashboard</title>
+    <style>
+      @font-face { font-family: 'Instrument Sans'; src: url('../../fonts/instrument-sans.woff2') format('woff2'); font-weight: 400 700; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 14px/1.45 'Instrument Sans', system-ui, sans-serif; color: #1f2633; background: #f4f6fa; display: flex; height: 100vh; }
+      aside { width: 220px; background: #111827; color: #cbd2de; padding: 22px 16px; flex: none; }
+      .logo { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 700; font-size: 17px; margin-bottom: 28px; }
+      .logo i { width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, #34d399, #3b82f6); }
+      nav a { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; color: inherit; text-decoration: none; margin-bottom: 2px; }
+      nav a.on { background: #1f2937; color: #fff; }
+      nav a b { width: 8px; height: 8px; border-radius: 3px; background: #4b5563; }
+      nav a.on b { background: #34d399; }
+      main { flex: 1; padding: 26px 32px; overflow: hidden; }
+      header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+      h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+      .sub { color: #6b7280; margin-top: 2px; }
+      .btn { background: #3b5bdb; color: #fff; padding: 9px 16px; border-radius: 8px; font-weight: 600; }
+      .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 18px; }
+      .card { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+      .card small { color: #6b7280; font-weight: 500; }
+      .card strong { display: block; font-size: 26px; letter-spacing: -0.02em; margin: 4px 0 2px; }
+      .up { color: #059669; font-weight: 600; font-size: 13px; }
+      .down { color: #dc2626; font-weight: 600; font-size: 13px; }
+      .row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; }
+      .panel { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.05); }
+      .panel h2 { margin: 0 0 12px; font-size: 15px; }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      th { text-align: left; color: #6b7280; font-weight: 500; padding: 6px 4px; border-bottom: 1px solid #e5e7eb; }
+      td { padding: 9px 4px; border-bottom: 1px solid #f0f2f5; }
+      .pill { padding: 2px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+      .ok { background: #d1fae5; color: #047857; }
+      .wait { background: #fef3c7; color: #b45309; }
+      .late { background: #fee2e2; color: #b91c1c; }
+      .bar { height: 8px; border-radius: 4px; background: #e5e7eb; overflow: hidden; }
+      .bar i { display: block; height: 100%; background: #3b5bdb; }
+      .task { margin-bottom: 14px; }
+      .task div:first-child { display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <div class="logo"><i></i>Atlas</div>
+      <nav>
+        <a class="on" href="#"><b></b>Dashboard</a>
+        <a href="#"><b></b>Projects</a>
+        <a href="#"><b></b>Team</a>
+        <a href="#"><b></b>Reports</a>
+        <a href="#"><b></b>Billing</a>
+        <a href="#"><b></b>Settings</a>
+      </nav>
+    </aside>
+    <main>
+      <header>
+        <div><h1>Q3 Launch Plan</h1><div class="sub">Updated 2 hours ago · 14 people</div></div>
+        <span class="btn">Share report</span>
+      </header>
+      <section class="cards">
+        <div class="card"><small>Revenue</small><strong>$84,200</strong><span class="up">▲ 24% vs Q2</span></div>
+        <div class="card"><small>New sign-ups</small><strong>3,912</strong><span class="up">▲ 12%</span></div>
+        <div class="card"><small>Churn</small><strong>2.1%</strong><span class="down">▲ 0.4%</span></div>
+        <div class="card"><small>Open tickets</small><strong>47</strong><span class="up">▼ 18</span></div>
+      </section>
+      <section class="row">
+        <div class="panel">
+          <h2>Weekly revenue</h2>
+          <svg viewBox="0 0 560 190" width="100%" height="190">
+            <defs><linearGradient id="g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#3b5bdb" stop-opacity=".28" /><stop offset="1" stop-color="#3b5bdb" stop-opacity="0" /></linearGradient></defs>
+            <g stroke="#eef0f4"><path d="M0 40h560M0 90h560M0 140h560" /></g>
+            <path d="M0 160 L50 150 L100 152 L150 130 L200 136 L250 112 L300 118 L350 92 L400 98 L450 64 L500 70 L560 38 L560 190 L0 190Z" fill="url(#g)" />
+            <path d="M0 160 L50 150 L100 152 L150 130 L200 136 L250 112 L300 118 L350 92 L400 98 L450 64 L500 70 L560 38" fill="none" stroke="#3b5bdb" stroke-width="3" />
+            <circle cx="450" cy="64" r="5" fill="#fff" stroke="#3b5bdb" stroke-width="3" />
+          </svg>
+        </div>
+        <div class="panel">
+          <h2>Milestones</h2>
+          <div class="task"><div><span>Design sign-off</span><span>100%</span></div><div class="bar"><i style="width: 100%"></i></div></div>
+          <div class="task"><div><span>Beta release</span><span>80%</span></div><div class="bar"><i style="width: 80%"></i></div></div>
+          <div class="task"><div><span>Marketing site</span><span>55%</span></div><div class="bar"><i style="width: 55%"></i></div></div>
+          <div class="task"><div><span>Launch event</span><span>20%</span></div><div class="bar"><i style="width: 20%"></i></div></div>
+        </div>
+      </section>
+      <section class="panel" style="margin-top: 16px">
+        <h2>Team</h2>
+        <table>
+          <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th></tr>
+          <tr><td>Maya Patel</td><td>maya.patel@example.com</td><td>Product lead</td><td><span class="pill ok">On track</span></td></tr>
+          <tr><td>Daniel Kim</td><td>daniel.kim@example.com</td><td>Engineering</td><td><span class="pill wait">In review</span></td></tr>
+          <tr><td>Sofia Rossi</td><td>sofia.rossi@example.com</td><td>Design</td><td><span class="pill ok">On track</span></td></tr>
+          <tr><td>Omar Haddad</td><td>omar.haddad@example.com</td><td>Marketing</td><td><span class="pill late">Blocked</span></td></tr>
+        </table>
+      </section>
+    </main>
+  </body>
+</html>

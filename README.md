@@ -6,23 +6,33 @@ A browser extension for **Chrome and Firefox** that captures any part of a page,
 
 **Capture**
 - **Select area**: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> on Mac). Drag to select, <kbd>Enter</kbd> for the whole screen, <kbd>Esc</kbd> to cancel.
-- **Visible part** and **Full page**. Full page scrolls and stitches the page, and sticky headers appear only once.
+- **Visible part** and **Full page**. Full page scrolls and stitches the page, and sticky headers appear only once. In apps where only a panel scrolls (Gmail, Slack, Notion, dashboards), it scrolls that panel and captures all of it.
 - **Screen or window**: capture another app, a whole monitor or another tab.
 - **Delay** of 3, 5 or 10 seconds, to capture menus and hover states.
 - **Right-click menu** on any page, plus the toolbar popup and keyboard shortcuts.
 - **Open image**: annotate any image you drop, paste or choose.
 
 **Annotate**
-- Pen, highlighter, line, arrow, rectangle, ellipse, numbered steps (they renumber automatically), text, blur and crop.
-- Everything stays editable: select an annotation to move it, resize it, recolour it or delete it. Double-click text to edit it.
-- 6 colours plus a custom colour, 3 sizes, and an optional fill for shapes and text labels.
-- Undo and redo, zoom, and <kbd>Shift</kbd> to snap lines to 45° or draw perfect squares and circles.
+- **Draw:** pen, brush (gets thinner as you move faster, and follows pen pressure), and highlighter (freehand or box).
+- **Shapes:** line, arrow (classic or tapered, one or two heads), rectangle and ellipse. Drag the middle of a line or arrow to curve it.
+- **Explain:** text, callout bubbles that point at something, numbered steps (they renumber automatically) and stamps (tick, cross, star, heart and more).
+- **Focus and hide:** spotlight (dims everything else), magnifier, and blur, pixelate or black out for private info.
+- **Style:** 10 colours plus a custom colour, size and opacity sliders, no fill, light fill or solid fill, solid, dashed or dotted lines, and drop shadows. Each tool remembers its last style.
+- Everything stays editable: select an annotation to move, resize, recolour, duplicate, reorder or delete it. Double-click text to edit it. The eraser removes whole annotations.
+- Undo and redo, crop, zoom, and <kbd>Shift</kbd> to snap lines to 45° or draw perfect squares and circles.
 
 **Save**
 - PNG, JPG, or PDF (A4, Letter, or one long page), or copy to the clipboard.
 - Settings for what happens after a capture (open the editor, save right away or copy), the default format and the quality.
 
 Press <kbd>?</kbd> in the editor to see every shortcut.
+
+## Screenshots
+
+| | |
+| --- | --- |
+| ![Editor with arrows, a callout, steps and a stamp on a dashboard](store/screenshots/1-annotate.png) | ![The tool bar and style bar, with a spotlight](store/screenshots/2-tools.png) |
+| ![Emails pixelated and a number blacked out](store/screenshots/3-privacy.png) | ![A long page captured as one tall image](store/screenshots/4-full-page.png) |
 
 ## Try it locally
 
@@ -51,6 +61,7 @@ Before uploading:
 - Bump `version` in `manifest.json` for every release.
 - Run `npx web-ext lint --source-dir dist/firefox` to check the Firefox build.
 - For the privacy section in both stores, state that no data is collected and link to [`PRIVACY.md`](PRIVACY.md).
+- The Chrome listing text, screenshots and promo tiles are in [`store/`](store/LISTING.md).
 
 ## Project layout
 
@@ -70,6 +81,7 @@ fonts/                   Instrument Sans (SIL Open Font License)
 scripts/build.mjs        Builds Chrome and Firefox packages into dist/
 scripts/make-icons.py    Regenerates icons/ (needs Pillow)
 test/pdf.test.mjs        Checks generated PDFs with qpdf
+store/                   Chrome Web Store artwork and listing text (see store/README.md)
 ```
 
 There's no build step for development and no third-party code, just plain JavaScript.
@@ -77,5 +89,5 @@ There's no build step for development and no third-party code, just plain JavaSc
 ## Known limits
 
 - Browsers block extensions on their own pages (`chrome://`, `about:`) and on the extension stores. The toolbar icon shows a red **!** there.
-- Full-page capture scrolls the main page. Apps that scroll inside a panel (Gmail, Google Docs) capture only what is visible.
+- Full-page capture scrolls either the page or its largest scrolling panel, not several panels at once. Apps that draw their content on a canvas (Google Docs, Google Sheets) and panels inside embedded frames capture only what is visible.
 - Pages taller than the browser's canvas limit (about 32,000 px) are scaled down to fit.

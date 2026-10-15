@@ -1,0 +1,50 @@
+<!doctype html>
+<!-- A made-up long article, shown as a stitched full-page capture in the store screenshots. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Release notes</title>
+    <style>
+      @font-face { font-family: 'Instrument Sans'; src: url('../../fonts/instrument-sans.woff2') format('woff2'); font-weight: 400 700; }
+      body { margin: 0; font: 17px/1.6 'Instrument Sans', system-ui, sans-serif; color: #1f2633; background: #fff; }
+      .top { position: sticky; top: 0; background: #111827; color: #fff; padding: 16px 40px; font-weight: 700; }
+      article { max-width: 760px; margin: 0 auto; padding: 40px 40px 80px; }
+      h1 { font-size: 40px; letter-spacing: -0.02em; line-height: 1.15; margin: 10px 0 8px; }
+      h2 { font-size: 24px; margin: 40px 0 8px; }
+      .meta { color: #6b7280; margin-bottom: 28px; }
+      .hero { height: 260px; border-radius: 16px; background: linear-gradient(135deg, #34d399, #3b82f6 60%, #7048e8); margin-bottom: 28px; }
+      .fig { height: 180px; border-radius: 12px; background: #eef2ff; display: grid; place-items: center; color: #3b5bdb; font-weight: 600; margin: 18px 0; }
+      .fig.alt { background: #fff4e6; color: #e8590c; }
+      .fig.green { background: #ebfbee; color: #2b8a3e; }
+      blockquote { margin: 20px 0; padding: 4px 20px; border-left: 4px solid #3b5bdb; color: #4a5568; font-style: italic; }
+      footer { border-top: 1px solid #e5e7eb; padding-top: 20px; color: #6b7280; }
+    </style>
+  </head>
+  <body>
+    <div class="top">Atlas Journal</div>
+    <article>
+      <h1>Everything new in the Q3 release</h1>
+      <div class="meta">By the Atlas team · 8 min read</div>
+      <div class="hero"></div>
+      <p>This quarter we focused on speed, sharing and a calmer interface. Here is a tour of what changed, why we changed it, and what is coming next.</p>
+      <h2>1. A faster dashboard</h2>
+      <p>Dashboards now load in under a second, even for teams with thousands of projects. Charts render progressively, so you see the shape of your data straight away while details fill in.</p>
+      <div class="fig">Chart: load time before and after</div>
+      <p>We rebuilt the data layer from scratch and moved heavy work off the main thread. Scrolling stays smooth while reports update in the background.</p>
+      <h2>2. Sharing that respects privacy</h2>
+      <p>Reports can now be shared with a link that expires. Sensitive columns are hidden by default, and you choose exactly what each viewer sees.</p>
+      <blockquote>“We send reports to clients every week. Hiding internal columns used to take an hour. Now it takes a click.”</blockquote>
+      <div class="fig alt">Screenshot: the new share dialog</div>
+      <h2>3. Milestones and reminders</h2>
+      <p>Milestones show progress at a glance and warn you early when something slips. Reminders arrive in your inbox the day before a deadline, never at 3 a.m.</p>
+      <div class="fig green">Diagram: how reminders are scheduled</div>
+      <h2>4. A calmer interface</h2>
+      <p>We removed visual noise, grouped related settings, and made every button say what it does. Dark mode now follows your system setting automatically.</p>
+      <p>Keyboard shortcuts cover every common action. Press the question mark key anywhere to see them all.</p>
+      <h2>5. What's next</h2>
+      <p>Next quarter brings offline mode, a public API and deeper calendar integration. As always, tell us what you would like to see.</p>
+      <div class="fig">Roadmap preview</div>
+      <footer>Thanks for reading. Questions? Reply to this post and the team will get back to you.</footer>
+    </article>
+  </body>
+</html>

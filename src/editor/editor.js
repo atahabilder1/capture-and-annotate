@@ -6,20 +6,62 @@ import { getSettings } from '../lib/settings.js';
 const MAX_SIDE = 32767;
 const MAX_AREA = 200_000_000;
 const HISTORY_LIMIT = 100;
-// Sizes in CSS pixels of the captured page; multiplied by `scale` for image pixels.
-const SIZES = {
-  s: { stroke: 2, font: 16, step: 12 },
-  m: { stroke: 4, font: 22, step: 16 },
-  l: { stroke: 8, font: 32, step: 22 },
-};
+// Size levels 1–10, in CSS pixels of the captured page; multiplied by `scale` for image pixels.
+const STROKES = [1, 2, 3, 4, 5, 6, 8, 10, 13, 16];
+const FONTS = [12, 14, 17, 20, 24, 28, 34, 42, 52, 64];
+const RADII = [9, 10, 12, 14, 16, 18, 21, 24, 28, 32];
 const ZOOM_STEPS = [0.1, 0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1, 1.25, 1.5, 2, 3, 4];
-const BOX_TYPES = new Set(['rect', 'ellipse', 'blur']);
-const FILL_TYPES = new Set(['rect', 'ellipse', 'text']);
+const BOX_TYPES = new Set(['rect', 'ellipse', 'blur', 'hlbox', 'spotlight', 'magnify']);
+const TEXT_TYPES = new Set(['text', 'callout']);
+// The style options each annotation type uses. The style bar shows exactly these.
+const OPTIONS = {
+  pen: ['color', 'size', 'opacity', 'dash', 'shadow'],
+  brush: ['color', 'size'],
+  highlight: ['color', 'size'],
+  hlbox: ['color'],
+  line: ['color', 'size', 'opacity', 'dash', 'shadow'],
+  arrow: ['color', 'size', 'opacity', 'arrow', 'heads', 'dash', 'shadow'],
+  rect: ['color', 'size', 'opacity', 'fill', 'dash', 'shadow'],
+  ellipse: ['color', 'size', 'opacity', 'fill', 'dash', 'shadow'],
+  text: ['color', 'size', 'opacity', 'fill', 'shadow'],
+  callout: ['color', 'size', 'fill', 'shadow'],
+  step: ['color', 'size', 'shadow'],
+  stamp: ['stamp', 'color', 'size', 'shadow'],
+  blur: ['blur', 'size'],
+  spotlight: ['spot'],
+  magnify: ['zoom'],
+};
+const DEFAULT_STYLE = {
+  color: '#e5383b', size: 4, opacity: 1, fill: 'none', dash: 'solid', arrow: 'classic', heads: 'end',
+  hlmode: 'free', blur: 'pixelate', spot: 'rect', zoom: 2, stamp: 'check', shadow: false,
+};
+const TOOL_DEFAULTS = {
+  highlight: { color: '#ffd43b' },
+  brush: { size: 5 },
+  text: { size: 5 },
+  callout: { fill: 'solid' },
+  stamp: { size: 5 },
+  blur: { size: 5, color: '#1b2433' },
+};
+// Tools that keep their own colour instead of sharing the last colour picked.
+const OWN_COLOR = new Set(['highlight', 'blur']);
 const TOOL_KEYS = {
-  v: 'select', p: 'pen', h: 'highlight', l: 'line', a: 'arrow', r: 'rect',
-  e: 'ellipse', n: 'step', t: 'text', b: 'blur', c: 'crop',
+  v: 'select', p: 'pen', k: 'brush', h: 'highlight', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse',
+  t: 'text', q: 'callout', n: 'step', s: 'stamp', b: 'blur', f: 'spotlight', m: 'magnify', x: 'eraser', c: 'crop',
+};
+// Stamp glyphs on a 24×24 grid, drawn on a coloured badge.
+const STAMPS = {
+  check: { label: 'Tick', d: 'M7.6 12.3l3 3 5.8-6.2' },
+  cross: { label: 'Cross', d: 'M8.6 8.6l6.8 6.8M15.4 8.6l-6.8 6.8' },
+  alert: { label: 'Exclamation mark', d: 'M12 6.9v6.3M12 16.9v.2' },
+  question: { label: 'Question mark', d: 'M9.4 9.6a2.7 2.7 0 1 1 3.8 2.5c-.8.4-1.2.9-1.2 1.7v.4M12 17v.2' },
+  info: { label: 'Info', d: 'M12 11v6M12 7.2v.2' },
+  star: { label: 'Star', d: 'M12 6.2l1.8 3.7 4 .6-2.9 2.8.7 4L12 15.4l-3.6 1.9.7-4-2.9-2.8 4-.6z', filled: true },
+  heart: { label: 'Heart', d: 'M12 17.6s-5.6-3.3-5.6-7.3a3 3 0 0 1 5.6-1.5 3 3 0 0 1 5.6 1.5c0 4-5.6 7.3-5.6 7.3z', filled: true },
 };
 const FONT_FAMILY = '"Instrument Sans", system-ui, sans-serif';
+const INK = '#1b2433';
+const PREFS_KEY = 'editor-style';
 
 const $ = (sel) => document.querySelector(sel);
 const canvas = $('#canvas');
@@ -30,6 +72,7 @@ const stage = $('#stage');
 const workspace = $('#workspace');
 const stylebar = $('#stylebar');
 const measureCtx = document.createElement('canvas').getContext('2d');
+const stampPaths = new Map();
 
 let settings;
 let meta = { title: 'Screenshot', takenAt: Date.now() };
@@ -38,8 +81,10 @@ let scale = 1; // image pixels per CSS pixel of the captured page
 let doc = { crop: null, shapes: [] }; // shapes use base-image coordinates
 let nextId = 1;
 let tool = 'select';
-const style = { color: '#e5383b', size: 'm', fill: false };
+const prefs = loadPrefs(); // last style used with each tool, kept between sessions
+let style = { ...DEFAULT_STYLE };
 let selectedId = null;
+let hoverId = null; // annotation under the eraser
 let editing = null; // text being typed: { shape, el, isNew, before }
 let action = null; // pointer gesture in progress
 let zoom = 'fit';
@@ -122,14 +167,24 @@ async function compose(c) {
     out.height = clamp(Math.round(r.height * scale), 1, first.height - sy);
     octx2.drawImage(first, sx, sy, out.width, out.height, 0, 0, out.width, out.height);
   } else if (c.mode === 'full') {
-    const width = first.width;
-    const height = Math.round(c.tiles.at(-1).y * scale) + images.at(-1).height;
+    // An inner scrolling panel keeps only its own area of each tile; a scrolled page keeps all of it.
+    const clip = c.clip
+      ? {
+          x: clamp(Math.round(c.clip.x * scale), 0, first.width - 1),
+          y: clamp(Math.round(c.clip.y * scale), 0, first.height - 1),
+          w: Math.round(c.clip.width * scale),
+          h: Math.round(c.clip.height * scale),
+        }
+      : { x: 0, y: 0, w: first.width, h: first.height };
+    clip.w = clamp(clip.w, 1, first.width - clip.x);
+    clip.h = clamp(clip.h, 1, first.height - clip.y);
+    const width = clip.w;
+    const height = Math.round(c.tiles.at(-1).y * scale) + clip.h;
     const fit = Math.min(1, MAX_SIDE / width, MAX_SIDE / height, Math.sqrt(MAX_AREA / (width * height)));
     out.width = Math.floor(width * fit);
     out.height = Math.floor(height * fit);
     c.tiles.forEach((t, i) => {
-      const img = images[i];
-      octx2.drawImage(img, 0, Math.round(t.y * scale * fit), img.width * fit, img.height * fit);
+      octx2.drawImage(images[i], clip.x, clip.y, clip.w, clip.h, 0, Math.round(t.y * scale * fit), clip.w * fit, clip.h * fit);
     });
     scale *= fit;
     if (fit < 1) setTimeout(() => toast('This page is very long, so it was scaled down to fit.'), 400);
@@ -167,7 +222,11 @@ async function openImageFile(file) {
 // ---- View, zoom and rendering ----
 
 function view() {
-  return doc.crop || { x: 0, y: 0, w: base.width, h: base.height };
+  return doc.crop || baseRect();
+}
+
+function baseRect() {
+  return { x: 0, y: 0, w: base.width, h: base.height };
 }
 
 function resizeView() {
@@ -229,14 +288,39 @@ function render(dirty) {
   ctx.clip();
   ctx.clearRect(area.x, area.y, area.w, area.h);
   ctx.drawImage(base, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
+  drawSpotlights(area);
   let step = 0;
   for (const s of doc.shapes) {
     if (s.type === 'step') step++;
-    if (editing?.shape === s) continue;
+    if (s.type === 'spotlight' || editing?.shape === s) continue;
     if (dirty && !intersect(bounds(s), area)) continue;
     drawShape(ctx, s, step);
   }
   ctx.restore();
+}
+
+// Spotlights dim the whole image except their own areas, under every other annotation.
+function drawSpotlights(area) {
+  const spots = doc.shapes.filter((s) => s.type === 'spotlight');
+  if (!spots.length) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(12, 16, 24, 0.6)';
+  ctx.fillRect(area.x, area.y, area.w, area.h);
+  for (const s of spots) {
+    ctx.save();
+    spotPath(ctx, s);
+    ctx.clip();
+    ctx.drawImage(base, area.x, area.y, area.w, area.h, area.x, area.y, area.w, area.h);
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+function spotPath(c, s, begin = true) {
+  const b = normBox(s);
+  if (begin) c.beginPath();
+  if (s.spot === 'ellipse') c.ellipse(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, 0, 0, Math.PI * 2);
+  else c.roundRect(b.x, b.y, b.w, b.h, Math.min(6 * scale, b.w / 2, b.h / 2));
 }
 
 // Draws previews and the selection on the overlay canvas.
@@ -250,36 +334,50 @@ function drawOverlay() {
 
   if (action?.kind === 'draw') {
     const d = action.shape;
+    const b = normBox(d);
     if (d.type === 'crop') {
-      const b = normBox(d);
-      octx.fillStyle = 'rgba(18, 22, 29, 0.5)';
-      octx.beginPath();
-      octx.rect(v.x, v.y, v.w, v.h);
-      octx.rect(b.x, b.y + b.h, b.w, -b.h); // opposite winding cuts a hole
-      octx.fill('evenodd');
+      dimOutside(v, (c) => c.rect(b.x, b.y + b.h, b.w, -b.h)); // opposite winding cuts a hole
       drawFrame(b, true);
-    } else if (d.type === 'blur') {
-      const b = normBox(d);
+    } else if (d.type === 'spotlight') {
+      if (!doc.shapes.some((s) => s.type === 'spotlight')) dimOutside(v, (c) => spotPath(c, { ...d, ...b }, false));
+      drawFrame(b, false);
+    } else if (d.type === 'blur' && d.blur !== 'redact') {
       octx.fillStyle = 'rgba(123, 133, 151, 0.35)';
       octx.fillRect(b.x, b.y, b.w, b.h);
       drawFrame(b, false);
+    } else if (d.type === 'callout') {
+      drawShape(octx, { ...d, text: 'Text' });
     } else {
-      drawShape(octx, BOX_TYPES.has(d.type) ? { ...d, ...normBox(d) } : d, countSteps() + 1);
+      drawShape(octx, BOX_TYPES.has(d.type) ? { ...d, ...b } : d, countSteps() + 1);
     }
   }
+
+  // While typing in a callout, the bubble is drawn here and the text box sits on top of it.
+  if (editing?.shape.type === 'callout') drawShape(octx, { ...editing.shape, text: editing.el.value || ' ' }, 0, true);
 
   const sel = selected();
   if (sel && !editing) {
     drawFrame(shapeBox(sel), true);
     for (const h of handles(sel)) drawHandle(h);
   }
+  const hover = tool === 'eraser' && !action && doc.shapes.find((s) => s.id === hoverId);
+  if (hover) drawFrame(shapeBox(hover), false, '#e5383b');
 }
 
-function drawFrame(b, corners) {
+function dimOutside(v, addHole) {
+  octx.fillStyle = 'rgba(18, 22, 29, 0.5)';
+  octx.beginPath();
+  octx.rect(v.x, v.y, v.w, v.h);
+  addHole(octx);
+  octx.fill('evenodd');
+}
+
+function drawFrame(b, corners, color) {
   const px = screenPx(1);
   octx.save();
-  octx.lineWidth = px;
-  octx.strokeStyle = 'rgba(47, 76, 221, 0.7)';
+  octx.lineWidth = color ? px * 1.5 : px;
+  octx.strokeStyle = color || 'rgba(47, 76, 221, 0.7)';
+  if (color) octx.setLineDash([px * 5, px * 4]);
   octx.strokeRect(b.x, b.y, b.w, b.h);
   if (corners) {
     // Crop-mark corners, matching the rest of the interface.
@@ -302,11 +400,11 @@ function drawFrame(b, corners) {
 function drawHandle(h) {
   octx.save();
   octx.beginPath();
-  octx.arc(h.x, h.y, screenPx(5.5), 0, Math.PI * 2);
-  octx.fillStyle = '#fff';
+  octx.arc(h.x, h.y, screenPx(h.name === 'mid' ? 4.5 : 5.5), 0, Math.PI * 2);
+  octx.fillStyle = h.name === 'mid' ? '#2f4cdd' : '#fff';
   octx.fill();
   octx.lineWidth = screenPx(2);
-  octx.strokeStyle = '#2f4cdd';
+  octx.strokeStyle = h.name === 'mid' ? '#fff' : '#2f4cdd';
   octx.stroke();
   octx.restore();
 }
@@ -327,23 +425,49 @@ function toBase(e) {
 
 // ---- Shapes ----
 
+function level(table, s) {
+  return table[clamp(Math.round(s.size ?? 4), 1, 10) - 1];
+}
+
 function lineWidth(s) {
-  const w = SIZES[s.size].stroke * scale;
-  return s.type === 'highlight' ? w * 5 : w;
+  const w = level(STROKES, s) * scale;
+  if (s.type === 'highlight') return w * 5;
+  if (s.type === 'brush') return w * 1.8;
+  return w;
 }
 
 function fontPx(s) {
-  return SIZES[s.size].font * scale;
+  return level(FONTS, s) * scale;
 }
 
 function stepRadius(s) {
-  return SIZES[s.size].step * scale;
+  return level(RADII, s) * scale * (s.type === 'stamp' ? 1.2 : 1);
 }
 
 function contrastColor(hex) {
+  const [r, g, b] = rgb(hex);
+  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? INK : '#ffffff';
+}
+
+function rgb(hex) {
   const n = parseInt(hex.slice(1), 16);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  return 0.299 * r + 0.587 * g + 0.114 * b > 160 ? '#1b2433' : '#ffffff';
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Blends `hex` toward white; `t` is how much white.
+function tint(hex, t) {
+  return `rgb(${rgb(hex).map((v) => Math.round(v + (255 - v) * t)).join(' ')})`;
+}
+
+function textColors(s) {
+  const fill = s.fill || 'none';
+  if (s.type === 'callout') {
+    if (fill === 'solid') return { fg: contrastColor(s.color), bg: s.color };
+    return { fg: INK, bg: fill === 'tint' ? tint(s.color, 0.82) : '#ffffff', border: s.color };
+  }
+  if (fill === 'solid') return { fg: contrastColor(s.color), bg: s.color };
+  if (fill === 'tint') return { fg: INK, bg: tint(s.color, 0.8) };
+  return { fg: s.color, bg: null };
 }
 
 function textLayout(s) {
@@ -351,190 +475,520 @@ function textLayout(s) {
   measureCtx.font = `600 ${size}px ${FONT_FAMILY}`;
   const lines = s.text.split('\n');
   const lineHeight = size * 1.25;
-  const pad = s.fill ? size * 0.35 : 0;
-  const width = Math.max(size * 0.5, ...lines.map((l) => measureCtx.measureText(l).width));
+  const pad = s.type === 'callout' ? size * 0.55 : s.fill && s.fill !== 'none' ? size * 0.35 : 0;
+  const width = Math.max(size * (s.type === 'callout' ? 1.5 : 0.5), ...lines.map((l) => measureCtx.measureText(l).width));
   return { size, lines, lineHeight, pad, box: { x: s.x, y: s.y, w: width + pad * 2, h: lines.length * lineHeight + pad * 2 } };
 }
 
-function drawShape(c, s, stepNumber) {
+function applyDash(c, s, w) {
+  if (s.dash === 'dashed') {
+    c.setLineDash([w * 2.5, w * 2]);
+    c.lineCap = 'butt';
+  } else if (s.dash === 'dotted') {
+    c.setLineDash([0.001, w * 2]);
+    c.lineCap = 'round';
+  }
+}
+
+function applyShadow(c) {
+  c.shadowColor = 'rgba(12, 16, 24, 0.4)';
+  c.shadowBlur = 8 * scale;
+  c.shadowOffsetY = 2 * scale;
+}
+
+// Traces a smooth curve through freehand points.
+function tracePoints(c, pts) {
+  c.moveTo(pts[0].x, pts[0].y);
+  if (pts.length === 1) return c.lineTo(pts[0].x + 0.1, pts[0].y);
+  for (let i = 1; i < pts.length - 1; i++) {
+    c.quadraticCurveTo(pts[i].x, pts[i].y, (pts[i].x + pts[i + 1].x) / 2, (pts[i].y + pts[i + 1].y) / 2);
+  }
+  c.lineTo(pts.at(-1).x, pts.at(-1).y);
+}
+
+function drawShape(c, s, stepNumber, hideText = false) {
   c.save();
   c.strokeStyle = s.color;
   c.fillStyle = s.color;
-  c.lineWidth = s.type === 'blur' ? 1 : lineWidth(s);
+  c.globalAlpha = s.opacity ?? 1;
+  c.lineWidth = lineWidth(s);
   c.lineCap = 'round';
   c.lineJoin = 'round';
+  if (s.shadow) applyShadow(c);
   switch (s.type) {
     case 'pen':
-    case 'highlight': {
-      if (s.type === 'highlight') {
-        c.globalAlpha = 0.4;
-        c.lineCap = 'square';
-        if (c === ctx) c.globalCompositeOperation = 'multiply';
-      }
+      applyDash(c, s, c.lineWidth);
       c.beginPath();
-      c.moveTo(s.points[0].x, s.points[0].y);
-      for (const p of s.points.slice(1)) c.lineTo(p.x, p.y);
-      if (s.points.length === 1) c.lineTo(s.points[0].x + 0.1, s.points[0].y);
+      tracePoints(c, s.points);
       c.stroke();
       break;
+    case 'highlight':
+      c.globalAlpha = 0.4;
+      c.lineCap = 'square';
+      if (c === ctx) c.globalCompositeOperation = 'multiply';
+      c.beginPath();
+      tracePoints(c, s.points);
+      c.stroke();
+      break;
+    case 'hlbox': {
+      const b = normBox(s);
+      c.globalAlpha = 0.4;
+      if (c === ctx) c.globalCompositeOperation = 'multiply';
+      c.fillRect(b.x, b.y, b.w, b.h);
+      break;
     }
+    case 'brush':
+      drawBrush(c, s);
+      break;
     case 'line':
-      c.beginPath();
-      c.moveTo(s.x1, s.y1);
-      c.lineTo(s.x2, s.y2);
-      c.stroke();
+    case 'arrow':
+      drawArrow(c, s);
       break;
-    case 'arrow': {
-      const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
-      const head = Math.max(12 * scale, lineWidth(s) * 3.6);
-      // Stop the shaft short so its round cap doesn't poke through the arrowhead.
-      c.beginPath();
-      c.moveTo(s.x1, s.y1);
-      c.lineTo(s.x2 - Math.cos(angle) * head * 0.7, s.y2 - Math.sin(angle) * head * 0.7);
-      c.stroke();
-      c.beginPath();
-      c.moveTo(s.x2, s.y2);
-      c.lineTo(s.x2 - head * Math.cos(angle - Math.PI / 7), s.y2 - head * Math.sin(angle - Math.PI / 7));
-      c.lineTo(s.x2 - head * Math.cos(angle + Math.PI / 7), s.y2 - head * Math.sin(angle + Math.PI / 7));
-      c.closePath();
-      c.lineWidth = Math.max(1, lineWidth(s) * 0.5);
-      c.fill();
-      c.stroke();
-      break;
-    }
     case 'rect':
     case 'ellipse': {
+      const b = normBox(s);
       c.beginPath();
-      if (s.type === 'rect') c.roundRect(s.x, s.y, s.w, s.h, Math.min(lineWidth(s), s.w / 2, s.h / 2));
-      else c.ellipse(s.x + s.w / 2, s.y + s.h / 2, s.w / 2, s.h / 2, 0, 0, Math.PI * 2);
-      if (s.fill) {
-        c.globalAlpha = 0.22;
+      if (s.type === 'rect') c.roundRect(b.x, b.y, b.w, b.h, Math.min(c.lineWidth, b.w / 2, b.h / 2));
+      else c.ellipse(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, b.h / 2, 0, 0, Math.PI * 2);
+      if (s.fill === 'solid' || s.fill === 'tint') {
+        const alpha = c.globalAlpha;
+        c.globalAlpha = alpha * (s.fill === 'solid' ? 1 : 0.22);
         c.fill();
-        c.globalAlpha = 1;
+        c.globalAlpha = alpha;
+        c.shadowColor = 'transparent';
       }
+      applyDash(c, s, c.lineWidth);
       c.stroke();
       break;
     }
     case 'blur':
       drawBlur(c, s);
       break;
-    case 'step': {
+    case 'magnify':
+      drawMagnifier(c, s);
+      break;
+    case 'step':
+    case 'stamp': {
       const r = stepRadius(s);
       c.beginPath();
       c.arc(s.x, s.y, r, 0, Math.PI * 2);
       c.fill();
+      c.shadowColor = 'transparent';
+      const fg = contrastColor(s.color);
       c.lineWidth = Math.max(1.5, r * 0.16);
-      c.strokeStyle = contrastColor(s.color) === '#ffffff' ? '#ffffff' : '#1b2433';
+      c.strokeStyle = fg;
       c.stroke();
-      c.fillStyle = contrastColor(s.color);
-      c.font = `700 ${r * 1.15}px ${FONT_FAMILY}`;
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillText(String(stepNumber), s.x, s.y + r * 0.06);
-      break;
-    }
-    case 'text': {
-      const t = textLayout(s);
-      c.font = `600 ${t.size}px ${FONT_FAMILY}`;
-      c.textBaseline = 'top';
-      if (s.fill) {
-        c.beginPath();
-        c.roundRect(t.box.x, t.box.y, t.box.w, t.box.h, t.size * 0.22);
-        c.fill();
-        c.fillStyle = contrastColor(s.color);
+      c.fillStyle = fg;
+      if (s.type === 'step') {
+        c.font = `700 ${r * 1.15}px ${FONT_FAMILY}`;
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText(String(stepNumber), s.x, s.y + r * 0.06);
       } else {
-        // A soft halo keeps text readable on busy screenshots.
-        c.lineWidth = t.size * 0.18;
-        c.strokeStyle = contrastColor(s.color) === '#ffffff' ? 'rgba(255,255,255,0.9)' : 'rgba(27,36,51,0.85)';
+        const glyph = STAMPS[s.stamp] || STAMPS.check;
+        c.translate(s.x - r, s.y - r);
+        c.scale((r * 2) / 24, (r * 2) / 24);
+        c.lineWidth = 2.5;
+        if (glyph.filled) c.fill(stampPath(glyph));
+        else c.stroke(stampPath(glyph));
       }
-      t.lines.forEach((line, i) => {
-        const y = s.y + t.pad + i * t.lineHeight + t.size * 0.1;
-        if (!s.fill) c.strokeText(line, s.x + t.pad, y);
-        c.fillText(line, s.x + t.pad, y);
-      });
       break;
     }
+    case 'text':
+      drawText(c, s);
+      break;
+    case 'callout':
+      drawCallout(c, s, hideText);
+      break;
   }
   c.restore();
 }
 
+function stampPath(glyph) {
+  if (!stampPaths.has(glyph)) stampPaths.set(glyph, new Path2D(glyph.d));
+  return stampPaths.get(glyph);
+}
+
+// Brush strokes vary in width: thinner when moving fast, or with light pen pressure.
+function drawBrush(c, s) {
+  const pts = s.points;
+  const w = lineWidth(s);
+  if (pts.length < 3) {
+    c.beginPath();
+    c.lineWidth = w * (pts[0].w ?? 1);
+    tracePoints(c, pts);
+    c.stroke();
+    return;
+  }
+  let from = pts[0];
+  for (let i = 1; i < pts.length; i++) {
+    const to = i < pts.length - 1 ? { x: (pts[i].x + pts[i + 1].x) / 2, y: (pts[i].y + pts[i + 1].y) / 2 } : pts[i];
+    c.beginPath();
+    c.moveTo(from.x, from.y);
+    c.quadraticCurveTo(pts[i].x, pts[i].y, to.x, to.y);
+    c.lineWidth = w * (pts[i].w ?? 1);
+    c.stroke();
+    from = to;
+  }
+}
+
+// Lines and arrows can be curved by a control point (cx, cy).
+function curve(s) {
+  return { a: { x: s.x1, y: s.y1 }, b: { x: s.x2, y: s.y2 }, k: 'cx' in s ? { x: s.cx, y: s.cy } : null };
+}
+
+function pointOn(s, t) {
+  const { a, b, k } = curve(s);
+  if (!k) return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+  const u = 1 - t;
+  return { x: u * u * a.x + 2 * u * t * k.x + t * t * b.x, y: u * u * a.y + 2 * u * t * k.y + t * t * b.y };
+}
+
+function curveSamples(s) {
+  if (!('cx' in s)) return [{ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }];
+  return Array.from({ length: 33 }, (_, i) => pointOn(s, i / 32));
+}
+
+function unit(dx, dy) {
+  const len = Math.hypot(dx, dy) || 1;
+  return { x: dx / len, y: dy / len };
+}
+
+function arrowHeads(s) {
+  return s.type === 'line' ? 'none' : s.heads || 'end';
+}
+
+function drawArrow(c, s) {
+  if (s.type === 'arrow' && s.arrow === 'tapered') return drawTaperedArrow(c, s);
+  const w = c.lineWidth;
+  const { a, b, k } = curve(s);
+  const heads = arrowHeads(s);
+  const head = Math.max(12 * scale, w * 3.6);
+  const dEnd = unit(b.x - (k || a).x, b.y - (k || a).y);
+  const dStart = unit(a.x - (k || b).x, a.y - (k || b).y);
+  // Stop the shaft short so its round cap doesn't poke through the arrowhead.
+  const e1 = heads === 'both' ? { x: a.x - dStart.x * head * 0.7, y: a.y - dStart.y * head * 0.7 } : a;
+  const e2 = heads !== 'none' ? { x: b.x - dEnd.x * head * 0.7, y: b.y - dEnd.y * head * 0.7 } : b;
+  c.save();
+  applyDash(c, s, w);
+  c.beginPath();
+  c.moveTo(e1.x, e1.y);
+  if (k) c.quadraticCurveTo(k.x, k.y, e2.x, e2.y);
+  else c.lineTo(e2.x, e2.y);
+  c.stroke();
+  c.restore();
+  if (heads !== 'none') drawArrowhead(c, b, dEnd, head, w);
+  if (heads === 'both') drawArrowhead(c, a, dStart, head, w);
+}
+
+function drawArrowhead(c, tip, d, head, w) {
+  const angle = Math.atan2(d.y, d.x);
+  c.beginPath();
+  c.moveTo(tip.x, tip.y);
+  c.lineTo(tip.x - head * Math.cos(angle - Math.PI / 7), tip.y - head * Math.sin(angle - Math.PI / 7));
+  c.lineTo(tip.x - head * Math.cos(angle + Math.PI / 7), tip.y - head * Math.sin(angle + Math.PI / 7));
+  c.closePath();
+  c.lineWidth = Math.max(1, w * 0.5);
+  c.fill();
+  c.stroke();
+}
+
+// A solid arrow that widens from a thin tail to a large head.
+function drawTaperedArrow(c, s) {
+  const w = lineWidth(s);
+  const pts = curveSamples(s);
+  const lengths = [0];
+  for (let i = 1; i < pts.length; i++) lengths.push(lengths[i - 1] + dist(pts[i - 1], pts[i]));
+  const total = lengths.at(-1);
+  if (total < 1) return;
+  const both = s.heads === 'both';
+  const head = Math.min(total * (both ? 0.4 : 0.6), Math.max(16 * scale, w * 4.6));
+  const halfHead = head * 0.6;
+  const at = (len) => {
+    const i = clamp(lengths.findIndex((l) => l >= len), 1, pts.length - 1);
+    const t = (len - lengths[i - 1]) / Math.max(1e-6, lengths[i] - lengths[i - 1]);
+    return { x: pts[i - 1].x + (pts[i].x - pts[i - 1].x) * t, y: pts[i - 1].y + (pts[i].y - pts[i - 1].y) * t, len };
+  };
+  const startCut = both ? head : 0;
+  const endCut = total - head;
+  const shaft = [at(startCut), ...pts.map((p, i) => ({ ...p, len: lengths[i] })).filter((p) => p.len > startCut && p.len < endCut), at(endCut)];
+  const half = (len) => (both ? w * 1.1 : w * (0.3 + 1.1 * (len / total)));
+  const left = [];
+  const right = [];
+  shaft.forEach((p, i) => {
+    const prev = shaft[Math.max(0, i - 1)];
+    const next = shaft[Math.min(shaft.length - 1, i + 1)];
+    const d = unit(next.x - prev.x, next.y - prev.y);
+    const h = half(p.len);
+    left.push({ x: p.x - d.y * h, y: p.y + d.x * h });
+    right.push({ x: p.x + d.y * h, y: p.y - d.x * h });
+  });
+  const tipEnd = { x: s.x2, y: s.y2 };
+  const baseEnd = shaft.at(-1);
+  const dEnd = unit(tipEnd.x - baseEnd.x, tipEnd.y - baseEnd.y);
+  c.beginPath();
+  left.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+  c.lineTo(baseEnd.x - dEnd.y * halfHead, baseEnd.y + dEnd.x * halfHead);
+  c.lineTo(tipEnd.x, tipEnd.y);
+  c.lineTo(baseEnd.x + dEnd.y * halfHead, baseEnd.y - dEnd.x * halfHead);
+  for (let i = right.length - 1; i >= 0; i--) c.lineTo(right[i].x, right[i].y);
+  if (both) {
+    const tip = { x: s.x1, y: s.y1 };
+    const b0 = shaft[0];
+    const d0 = unit(b0.x - tip.x, b0.y - tip.y); // forward direction at the start
+    c.lineTo(b0.x + d0.y * halfHead, b0.y - d0.x * halfHead);
+    c.lineTo(tip.x, tip.y);
+    c.lineTo(b0.x - d0.y * halfHead, b0.y + d0.x * halfHead);
+  }
+  c.closePath();
+  c.lineWidth = Math.max(1, w * 0.3);
+  c.fill();
+  c.stroke();
+}
+
+function drawText(c, s) {
+  const t = textLayout(s);
+  const colors = textColors(s);
+  c.font = `600 ${t.size}px ${FONT_FAMILY}`;
+  c.textBaseline = 'top';
+  if (colors.bg) {
+    c.beginPath();
+    c.roundRect(t.box.x, t.box.y, t.box.w, t.box.h, t.size * 0.22);
+    c.fillStyle = colors.bg;
+    c.fill();
+    c.shadowColor = 'transparent';
+  } else {
+    // A soft halo keeps text readable on busy screenshots.
+    c.lineWidth = t.size * 0.18;
+    c.strokeStyle = contrastColor(s.color) === '#ffffff' ? 'rgba(255,255,255,0.9)' : 'rgba(27,36,51,0.85)';
+  }
+  c.fillStyle = colors.fg;
+  t.lines.forEach((line, i) => {
+    const y = s.y + t.pad + i * t.lineHeight + t.size * 0.1;
+    if (!colors.bg) c.strokeText(line, s.x + t.pad, y);
+    c.fillText(line, s.x + t.pad, y);
+  });
+}
+
+// A speech bubble whose tail points at (tx, ty).
+function drawCallout(c, s, hideText) {
+  const t = textLayout(s);
+  const colors = textColors(s);
+  const box = t.box;
+  c.beginPath();
+  c.roundRect(box.x, box.y, box.w, box.h, Math.min(t.size * 0.5, box.h / 2));
+  const tail = calloutTail(s, t);
+  if (tail) {
+    // Wind the tail the same way as the box so the two fill as one shape.
+    const [p, q, tip] = tail;
+    const clockwise = (q.x - p.x) * (tip.y - p.y) - (tip.x - p.x) * (q.y - p.y) > 0;
+    const [m, n] = clockwise ? [p, q] : [q, p];
+    c.moveTo(m.x, m.y);
+    c.lineTo(n.x, n.y);
+    c.lineTo(tip.x, tip.y);
+    c.closePath();
+  }
+  if (colors.border) {
+    // Stroke at double width, then fill: the fill covers the inner half and the tail's inner edges.
+    c.lineWidth = Math.max(2 * scale, t.size * 0.09) * 2;
+    c.strokeStyle = colors.border;
+    c.stroke();
+    c.shadowColor = 'transparent';
+  }
+  c.fillStyle = colors.bg;
+  c.fill();
+  c.shadowColor = 'transparent';
+  if (hideText) return;
+  c.font = `600 ${t.size}px ${FONT_FAMILY}`;
+  c.textBaseline = 'top';
+  c.fillStyle = colors.fg;
+  t.lines.forEach((line, i) => c.fillText(line, box.x + t.pad, box.y + t.pad + i * t.lineHeight + t.size * 0.1));
+}
+
+function calloutTail(s, t = textLayout(s)) {
+  const box = t.box;
+  const tip = { x: s.tx, y: s.ty };
+  if (inBox(tip, box, 0)) return null;
+  const center = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+  const d = unit(tip.x - center.x, tip.y - center.y);
+  const half = Math.min(t.size * 0.55, box.w / 3, box.h / 3);
+  return [
+    { x: center.x - d.y * half, y: center.y + d.x * half },
+    { x: center.x + d.y * half, y: center.y - d.x * half },
+    tip,
+  ];
+}
+
 function drawBlur(c, s) {
-  const b = roundOut(normBox(s));
-  const r = intersect(b, { x: 0, y: 0, w: base.width, h: base.height });
+  const r = intersect(roundOut(normBox(s)), baseRect());
   if (!r) return;
-  const key = `${r.x},${r.y},${r.w},${r.h}`;
+  const mode = s.blur || 'pixelate';
+  if (mode === 'redact') {
+    c.fillRect(r.x, r.y, r.w, r.h);
+    return;
+  }
+  const n = clamp(Math.round(s.size ?? 5), 1, 10);
+  const key = `${mode},${n},${r.x},${r.y},${r.w},${r.h}`;
   let cached = blurCache.get(s);
   if (cached?.key !== key) {
-    const block = Math.max(6, Math.round(10 * scale));
-    const small = document.createElement('canvas');
-    small.width = Math.max(1, Math.ceil(r.w / block));
-    small.height = Math.max(1, Math.ceil(r.h / block));
-    small.getContext('2d').drawImage(base, r.x, r.y, r.w, r.h, 0, 0, small.width, small.height);
-    cached = { key, small };
+    const img = document.createElement('canvas');
+    if (mode === 'pixelate') {
+      const block = Math.max(3, Math.round((3 + n * 1.6) * scale));
+      img.width = Math.max(1, Math.ceil(r.w / block));
+      img.height = Math.max(1, Math.ceil(r.h / block));
+      img.getContext('2d').drawImage(base, r.x, r.y, r.w, r.h, 0, 0, img.width, img.height);
+    } else {
+      const radius = (1.5 + n * 1.4) * scale;
+      // Include a margin of surrounding pixels so the edges blur evenly.
+      const m = Math.ceil(radius * 2);
+      const src = intersect({ x: r.x - m, y: r.y - m, w: r.w + m * 2, h: r.h + m * 2 }, baseRect());
+      img.width = r.w;
+      img.height = r.h;
+      const g = img.getContext('2d');
+      g.filter = `blur(${radius}px)`;
+      g.drawImage(base, src.x, src.y, src.w, src.h, src.x - r.x, src.y - r.y, src.w, src.h);
+    }
+    cached = { key, img };
     blurCache.set(s, cached);
   }
-  c.imageSmoothingEnabled = false;
-  c.drawImage(cached.small, 0, 0, cached.small.width, cached.small.height, r.x, r.y, r.w, r.h);
+  c.imageSmoothingEnabled = mode !== 'pixelate';
+  c.drawImage(cached.img, 0, 0, cached.img.width, cached.img.height, r.x, r.y, r.w, r.h);
+}
+
+// A round lens showing the image underneath enlarged.
+function drawMagnifier(c, s) {
+  const b = normBox(s);
+  if (b.w < 1 || b.h < 1) return;
+  const z = s.zoom || 2;
+  const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+  const ring = Math.max(2 * scale, Math.min(b.w, b.h) * 0.025);
+  const lens = () => {
+    c.beginPath();
+    c.ellipse(cx, cy, b.w / 2, b.h / 2, 0, 0, Math.PI * 2);
+  };
+  c.save();
+  applyShadow(c);
+  c.shadowBlur = 14 * scale;
+  lens();
+  c.fillStyle = '#ffffff';
+  c.fill();
+  c.restore();
+  c.save();
+  lens();
+  c.clip();
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(base, cx - b.w / (2 * z), cy - b.h / (2 * z), b.w / z, b.h / z, b.x, b.y, b.w, b.h);
+  c.restore();
+  lens();
+  c.lineWidth = ring;
+  c.strokeStyle = '#ffffff';
+  c.stroke();
 }
 
 // Box around the visible shape, used for selection and redraw areas.
 function shapeBox(s) {
   switch (s.type) {
     case 'pen':
-    case 'highlight': {
-      const xs = s.points.map((p) => p.x);
-      const ys = s.points.map((p) => p.y);
-      const x = Math.min(...xs), y = Math.min(...ys);
-      return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
-    }
+    case 'brush':
+    case 'highlight':
+      return pointsBox(s.points);
     case 'line':
     case 'arrow':
-      return normBox({ x: s.x1, y: s.y1, w: s.x2 - s.x1, h: s.y2 - s.y1 });
-    case 'step': {
+      return pointsBox(curveSamples(s));
+    case 'step':
+    case 'stamp': {
       const r = stepRadius(s);
       return { x: s.x - r, y: s.y - r, w: r * 2, h: r * 2 };
     }
     case 'text':
       return textLayout(s).box;
+    case 'callout': {
+      const box = textLayout(s).box;
+      return union(box, { x: s.tx, y: s.ty, w: 0, h: 0 });
+    }
     default:
       return normBox(s);
   }
 }
 
+function pointsBox(pts) {
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x = Math.min(...xs), y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
 function bounds(s) {
+  if (s.type === 'spotlight') return baseRect(); // it dims the whole image
   const b = shapeBox(s);
-  let pad = s.type === 'blur' ? 2 : lineWidth(s);
-  if (s.type === 'arrow') pad = Math.max(pad, 14 * scale, lineWidth(s) * 4);
-  if (s.type === 'text') pad = fontPx(s) * 0.2;
-  if (s.type === 'step') pad = stepRadius(s) * 0.2;
+  let pad;
+  switch (s.type) {
+    case 'blur':
+    case 'hlbox':
+      pad = 2;
+      break;
+    case 'magnify':
+      pad = 20 * scale + Math.min(b.w, b.h) * 0.03;
+      break;
+    case 'arrow':
+      pad = Math.max(16 * scale, lineWidth(s) * 4.6);
+      break;
+    case 'text':
+      pad = fontPx(s) * 0.2;
+      break;
+    case 'callout':
+      pad = fontPx(s) * 0.2 + 4 * scale;
+      break;
+    case 'step':
+    case 'stamp':
+      pad = stepRadius(s) * 0.2;
+      break;
+    default:
+      pad = lineWidth(s);
+  }
+  if (s.shadow) pad += 14 * scale;
   return { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 };
 }
 
 function hitTest(s, p, tol) {
-  const w = (s.type === 'blur' ? 0 : lineWidth(s) / 2) + tol;
+  const w = lineWidth(s) / 2 + tol;
   switch (s.type) {
     case 'pen':
+    case 'brush':
     case 'highlight':
-      return s.points.some((q, i) => (i === 0 ? dist(p, q) : distToSegment(p, s.points[i - 1], q)) <= w);
+      return hitPolyline(s.points, p, w);
     case 'line':
     case 'arrow':
-      return distToSegment(p, { x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }) <= w;
+      return hitPolyline(curveSamples(s), p, s.arrow === 'tapered' ? w * 2 : w);
     case 'rect':
-      return s.fill ? inBox(p, s, tol) : inBox(p, s, w) && !inBox(p, s, -w);
+      return s.fill === 'solid' || s.fill === 'tint' ? inBox(p, s, tol) : inBox(p, s, w) && !inBox(p, s, -w);
     case 'ellipse': {
       const rx = Math.abs(s.w) / 2, ry = Math.abs(s.h) / 2;
       if (rx < 2 || ry < 2) return inBox(p, s, w);
       const b = normBox(s);
       const d = Math.hypot((p.x - b.x - rx) / rx, (p.y - b.y - ry) / ry);
-      return s.fill ? d <= 1 + w / Math.min(rx, ry) : Math.abs(d - 1) * Math.min(rx, ry) <= w;
+      return s.fill === 'solid' || s.fill === 'tint' ? d <= 1 + w / Math.min(rx, ry) : Math.abs(d - 1) * Math.min(rx, ry) <= w;
     }
     case 'step':
+    case 'stamp':
       return dist(p, s) <= stepRadius(s) + tol;
     case 'text':
       return inBox(p, textLayout(s).box, tol);
+    case 'callout': {
+      const t = textLayout(s);
+      const tail = calloutTail(s, t);
+      return inBox(p, t.box, tol) || (!!tail && distToSegment(p, tail[2], { x: t.box.x + t.box.w / 2, y: t.box.y + t.box.h / 2 }) <= t.size * 0.4 + tol);
+    }
+    case 'spotlight':
+      // Only the edge, so clicks inside still reach what's underneath.
+      return inBox(p, s, tol * 1.5) && !inBox(p, s, -tol * 1.5);
     default:
       return inBox(p, s, tol);
   }
+}
+
+function hitPolyline(pts, p, w) {
+  return pts.some((q, i) => (i === 0 ? dist(p, q) : distToSegment(p, pts[i - 1], q)) <= w);
 }
 
 function handles(s) {
@@ -551,20 +1005,36 @@ function handles(s) {
     return [
       { name: 'p1', x: s.x1, y: s.y1 },
       { name: 'p2', x: s.x2, y: s.y2 },
+      { name: 'mid', ...pointOn(s, 0.5) },
     ];
   }
+  if (s.type === 'callout') return [{ name: 'tip', x: s.tx, y: s.ty }];
   return [];
 }
 
 function moveShape(s, dx, dy) {
-  if (s.points) s.points = s.points.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+  if (s.points) s.points = s.points.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy }));
   else if ('x1' in s) Object.assign(s, { x1: s.x1 + dx, y1: s.y1 + dy, x2: s.x2 + dx, y2: s.y2 + dy });
   else Object.assign(s, { x: s.x + dx, y: s.y + dy });
+  if ('cx' in s) Object.assign(s, { cx: s.cx + dx, cy: s.cy + dy });
+  if ('tx' in s) Object.assign(s, { tx: s.tx + dx, ty: s.ty + dy });
 }
 
 function resizeShape(s, handle, p) {
   if (handle === 'p1') return Object.assign(s, { x1: p.x, y1: p.y });
   if (handle === 'p2') return Object.assign(s, { x2: p.x, y2: p.y });
+  if (handle === 'tip') return Object.assign(s, { tx: p.x, ty: p.y });
+  if (handle === 'mid') {
+    // Dragging the middle bends the line; dropping it back near the straight middle straightens it.
+    const mid = { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 };
+    if (dist(p, mid) < screenPx(6)) {
+      delete s.cx;
+      delete s.cy;
+    } else {
+      Object.assign(s, { cx: 2 * p.x - mid.x, cy: 2 * p.y - mid.y });
+    }
+    return;
+  }
   const b = normBox(s);
   const ax = handle.includes('w') ? b.x + b.w : b.x;
   const ay = handle.includes('n') ? b.y + b.h : b.y;
@@ -591,12 +1061,55 @@ function select(id) {
   selectedId = id;
   const s = selected();
   if (s) {
-    style.color = s.color ?? style.color;
-    style.size = s.size ?? style.size;
-    if (FILL_TYPES.has(s.type)) style.fill = !!s.fill;
+    for (const k of ['color', 'size', ...optionKeys(s.type, s)]) if (k in s) style[k] = s[k];
+  } else {
+    style = toolStyle(tool);
   }
   syncStylebar();
   drawOverlay();
+}
+
+// ---- Styles ----
+
+function optionKeys(type, src) {
+  const keys = OPTIONS[type] || [];
+  if (type === 'blur' && src.blur === 'redact') return ['blur', 'color'];
+  if (type === 'arrow' && src.arrow === 'tapered') return keys.filter((k) => k !== 'dash');
+  return keys;
+}
+
+function typeForTool(t) {
+  return t === 'highlight' && style.hlmode === 'box' ? 'hlbox' : t;
+}
+
+function newShape(type, extra) {
+  const shape = { id: nextId++, type, color: style.color, size: style.size };
+  for (const k of optionKeys(type, style)) shape[k] = style[k];
+  return Object.assign(shape, extra);
+}
+
+function loadPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PREFS_KEY));
+    if (p?.tools) return p;
+  } catch {}
+  return { color: DEFAULT_STYLE.color, tools: {} };
+}
+
+function toolStyle(t) {
+  const s = { ...DEFAULT_STYLE, ...TOOL_DEFAULTS[t], ...prefs.tools[t] };
+  if (!OWN_COLOR.has(t)) s.color = prefs.color;
+  return s;
+}
+
+function rememberStyle(patch) {
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === 'color' && !OWN_COLOR.has(tool)) prefs.color = v;
+    else (prefs.tools[tool] ||= {})[k] = v;
+  }
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {}
 }
 
 // ---- Pointer input ----
@@ -609,9 +1122,14 @@ function setupPointer() {
     action = null;
     drawOverlay();
   });
+  overlay.addEventListener('pointerleave', () => {
+    if (hoverId === null) return;
+    hoverId = null;
+    drawOverlay();
+  });
   overlay.addEventListener('dblclick', (e) => {
     const s = topShapeAt(toBase(e));
-    if (s?.type === 'text') {
+    if (s && TEXT_TYPES.has(s.type)) {
       select(s.id);
       startTextEdit(s);
     }
@@ -623,13 +1141,13 @@ function onPointerDown(e) {
   e.preventDefault();
   if (editing) {
     commitText();
-    if (tool === 'text') return;
+    if (tool === 'text' || tool === 'callout') return;
   }
   const p = toBase(e);
   overlay.setPointerCapture(e.pointerId);
 
   const sel = selected();
-  if (sel && tool !== 'crop') {
+  if (sel && tool !== 'crop' && tool !== 'eraser') {
     const h = handles(sel).find((h) => dist(h, p) <= screenPx(9));
     if (h) {
       action = { kind: 'resize', shape: sel, handle: h.name, before: snapshot(), changed: false };
@@ -644,45 +1162,60 @@ function onPointerDown(e) {
     return;
   }
 
+  if (tool === 'eraser') {
+    action = { kind: 'erase', before: snapshot(), changed: false };
+    eraseAt(p);
+    return;
+  }
+
   if (tool === 'text') {
     const s = topShapeAt(p);
-    if (s?.type === 'text') {
+    if (s && TEXT_TYPES.has(s.type)) {
       select(s.id);
       startTextEdit(s);
     } else {
       select(null);
-      startTextEdit({ id: nextId++, type: 'text', x: p.x, y: p.y - fontPx(style) * 0.6, text: '', color: style.color, size: style.size, fill: style.fill });
+      startTextEdit(newShape('text', { x: p.x, y: p.y - fontPx(style) * 0.6, text: '' }));
     }
     return;
   }
 
-  if (tool === 'step') {
-    commitChange(() => doc.shapes.push({ id: nextId++, type: 'step', x: p.x, y: p.y, color: style.color, size: style.size }));
-    const s = doc.shapes.at(-1);
+  select(null);
+  const type = typeForTool(tool);
+  if (type === 'step' || type === 'stamp') {
+    const s = newShape(type, { x: p.x, y: p.y });
+    commitChange(() => doc.shapes.push(s));
     render(bounds(s));
     select(s.id);
     return;
   }
 
-  select(null);
-  const common = { id: nextId++, type: tool, color: style.color, size: style.size };
   let shape;
-  if (tool === 'pen' || tool === 'highlight') shape = { ...common, points: [p] };
-  else if (tool === 'line' || tool === 'arrow') shape = { ...common, x1: p.x, y1: p.y, x2: p.x, y2: p.y };
-  else shape = { ...common, fill: style.fill, x: p.x, y: p.y, w: 0, h: 0 };
-  action = { kind: 'draw', shape, start: p };
+  if (type === 'pen' || type === 'highlight') shape = newShape(type, { points: [p] });
+  else if (type === 'brush') shape = newShape(type, { points: [{ ...p, w: 0.45 }] });
+  else if (type === 'line' || type === 'arrow') shape = newShape(type, { x1: p.x, y1: p.y, x2: p.x, y2: p.y });
+  else if (type === 'callout') {
+    shape = newShape(type, { tx: p.x, ty: p.y, x: p.x, y: p.y, text: '' });
+    placeCallout(shape, null);
+  } else shape = newShape(type, { x: p.x, y: p.y, w: 0, h: 0 });
+  action = { kind: 'draw', shape, start: p, end: null, lastTime: e.timeStamp };
+  drawOverlay();
 }
 
 function onPointerMove(e) {
   if (!base) return;
   const p = toBase(e);
-  if (!action) return updateHoverCursor(p);
+  if (!action) return updateHover(p);
+  if (action.kind === 'erase') return eraseAt(p);
 
   if (action.kind === 'draw') {
     const s = action.shape;
     if (s.points) {
-      const last = s.points.at(-1);
-      if (dist(last, p) >= screenPx(1.5)) s.points.push(p);
+      // Coalesced events give smoother freehand lines when the pointer moves fast.
+      for (const ev of e.getCoalescedEvents?.() || [e]) addPoint(s, toBase(ev), ev);
+    } else if (s.type === 'callout') {
+      action.end = p;
+      placeCallout(s, dist(p, action.start) >= screenPx(12) ? p : null);
     } else if ('x1' in s) {
       Object.assign(s, { x2: p.x, y2: p.y });
       if (e.shiftKey) snapAngle(s);
@@ -714,16 +1247,35 @@ function onPointerMove(e) {
   drawOverlay();
 }
 
+function addPoint(s, p, e) {
+  const last = s.points.at(-1);
+  const d = dist(last, p);
+  if (d < screenPx(1.5)) return;
+  if (s.type === 'brush') {
+    let target;
+    if (e.pointerType === 'pen' && e.pressure > 0) {
+      target = 0.25 + e.pressure * 0.9;
+    } else {
+      const speed = d / screenPx(1) / Math.max(1, e.timeStamp - action.lastTime); // screen px per ms
+      target = clamp(1.1 - speed * 0.3, 0.35, 1);
+    }
+    action.lastTime = e.timeStamp;
+    p.w = last.w * 0.65 + target * 0.35;
+  }
+  s.points.push(p);
+}
+
 function onPointerUp() {
   if (!action) return;
   const a = action;
   action = null;
-  if (a.kind === 'draw') finishDrawing(a.shape);
-  else if (a.changed && BOX_TYPES.has(a.shape.type)) Object.assign(a.shape, normBox(a.shape));
+  if (a.kind === 'draw') finishDrawing(a);
+  else if (a.changed && a.shape && BOX_TYPES.has(a.shape.type)) Object.assign(a.shape, normBox(a.shape));
   drawOverlay();
 }
 
-function finishDrawing(s) {
+function finishDrawing(a) {
+  const s = a.shape;
   const minSize = screenPx(4);
   if (s.type === 'crop') {
     const b = intersect(roundOut(normBox(s)), view());
@@ -733,6 +1285,12 @@ function finishDrawing(s) {
       setTool('select');
     }
     return;
+  }
+  if (s.type === 'callout') return startTextEdit(s);
+  if (s.type === 'brush' && s.points.length > 2) {
+    // Taper the end of the stroke.
+    s.points.at(-1).w *= 0.4;
+    s.points.at(-2).w *= 0.7;
   }
   if ('x1' in s && dist({ x: s.x1, y: s.y1 }, { x: s.x2, y: s.y2 }) < minSize) return;
   if ('w' in s) {
@@ -744,6 +1302,29 @@ function finishDrawing(s) {
   select(s.id);
 }
 
+// Puts the callout bubble at `p`, or, for a plain click, up and to the right of the tip.
+function placeCallout(s, p) {
+  const t = textLayout({ ...s, text: s.text || 'Text' });
+  const gap = 40 * scale;
+  const at = p || { x: s.tx + gap, y: s.ty - gap };
+  s.x = at.x >= s.tx ? at.x : at.x - t.box.w;
+  s.y = at.y - t.box.h / 2;
+}
+
+function eraseAt(p) {
+  const s = topShapeAt(p);
+  if (!s) return;
+  if (!action.changed) {
+    action.changed = true;
+    pushUndo(action.before);
+  }
+  doc.shapes.splice(doc.shapes.indexOf(s), 1);
+  if (selectedId === s.id) select(null);
+  // Removing a step renumbers the ones after it, so redraw everything.
+  render(s.type === 'step' ? undefined : bounds(s));
+  drawOverlay();
+}
+
 function snapAngle(s) {
   const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
   const snapped = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
@@ -752,7 +1333,15 @@ function snapAngle(s) {
   s.y2 = s.y1 + Math.sin(snapped) * len;
 }
 
-function updateHoverCursor(p) {
+function updateHover(p) {
+  if (tool === 'eraser') {
+    const id = topShapeAt(p)?.id ?? null;
+    if (id !== hoverId) {
+      hoverId = id;
+      drawOverlay();
+    }
+    return;
+  }
   let cursor = '';
   const sel = selected();
   const h = sel && tool !== 'crop' ? handles(sel).find((h) => dist(h, p) <= screenPx(9)) : null;
@@ -774,10 +1363,12 @@ function startTextEdit(shape) {
   stage.append(el);
   layoutTextEditor();
   if (!isNew) render(bounds(shape));
+  syncStylebar();
   drawOverlay();
   el.addEventListener('input', () => {
     shape.text = el.value;
     layoutTextEditor();
+    if (shape.type === 'callout') drawOverlay();
   });
   el.addEventListener('keydown', (e) => {
     e.stopPropagation();
@@ -802,6 +1393,7 @@ function layoutTextEditor() {
   const v = view();
   const ratio = stage.clientWidth / canvas.width;
   const t = textLayout({ ...shape, text: el.value || ' ' });
+  const colors = textColors(shape);
   Object.assign(el.style, {
     left: `${(shape.x - v.x) * ratio}px`,
     top: `${(shape.y - v.y) * ratio}px`,
@@ -809,10 +1401,13 @@ function layoutTextEditor() {
     height: `${t.box.h * ratio}px`,
     fontSize: `${t.size * ratio}px`,
     padding: `${(t.pad + t.size * 0.1) * ratio}px ${t.pad * ratio}px 0`,
-    color: shape.fill ? contrastColor(shape.color) : shape.color,
-    background: shape.fill ? shape.color : 'transparent',
+    color: colors.fg,
+    // A callout's bubble is drawn on the overlay underneath.
+    background: shape.type === 'text' && colors.bg ? colors.bg : 'transparent',
     borderRadius: `${t.size * 0.22 * ratio}px`,
+    opacity: shape.opacity ?? 1,
   });
+  if (shape.type === 'callout') drawOverlay();
 }
 
 function commitText() {
@@ -847,6 +1442,7 @@ function cancelText() {
   el.remove();
   if (!isNew) Object.assign(shape, JSON.parse(before).shapes.find((s) => s.id === shape.id));
   render();
+  syncStylebar();
   drawOverlay();
 }
 
@@ -908,6 +1504,31 @@ function deleteSelected() {
   select(null);
 }
 
+function duplicateSelected() {
+  const s = selected();
+  if (!s) return;
+  const copy = structuredClone(s);
+  copy.id = nextId++;
+  moveShape(copy, screenPx(16), screenPx(16));
+  commitChange(() => doc.shapes.push(copy));
+  render(bounds(copy));
+  select(copy.id);
+}
+
+function reorderSelected(toFront) {
+  const s = selected();
+  if (!s) return;
+  const i = doc.shapes.indexOf(s);
+  if (i === (toFront ? doc.shapes.length - 1 : 0)) return;
+  commitChange(() => {
+    doc.shapes.splice(i, 1);
+    if (toFront) doc.shapes.push(s);
+    else doc.shapes.unshift(s);
+  });
+  render(); // step numbers follow the order
+  drawOverlay();
+}
+
 // ---- Toolbar ----
 
 function setupToolbar() {
@@ -918,9 +1539,36 @@ function setupToolbar() {
   document.querySelectorAll('[data-color]').forEach((b) => b.addEventListener('click', () => setStyle({ color: b.dataset.color })));
   $('#custom-color').addEventListener('input', (e) => setStyle({ color: e.target.value }, true));
   $('#custom-color').addEventListener('change', (e) => setStyle({ color: e.target.value }));
-  document.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => setStyle({ size: b.dataset.size })));
-  $('#fill').addEventListener('click', () => setStyle({ fill: !style.fill }));
+
+  const stamps = $('.stamps');
+  for (const [name, glyph] of Object.entries(STAMPS)) {
+    const b = document.createElement('button');
+    b.dataset.val = name;
+    b.title = glyph.label;
+    b.setAttribute('aria-label', glyph.label);
+    const svg = svgEl('svg', { viewBox: '0 0 24 24' });
+    svg.append(svgEl('circle', { cx: 12, cy: 12, r: 11, class: 'badge' }), svgEl('path', { d: glyph.d, class: glyph.filled ? 'glyph filled' : 'glyph' }));
+    b.append(svg);
+    stamps.append(b);
+  }
+  document.querySelectorAll('.seg[data-opt]').forEach((group) =>
+    group.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-val]');
+      if (!b) return;
+      const v = b.dataset.val;
+      setStyle({ [group.dataset.opt]: Number.isNaN(Number(v)) ? v : Number(v) });
+    }),
+  );
+  $('#size').addEventListener('input', (e) => setStyle({ size: Number(e.target.value) }, true));
+  $('#size').addEventListener('change', (e) => setStyle({ size: Number(e.target.value) }));
+  $('#opacity').addEventListener('input', (e) => setStyle({ opacity: Number(e.target.value) / 100 }, true));
+  $('#opacity').addEventListener('change', (e) => setStyle({ opacity: Number(e.target.value) / 100 }));
+  $('#shadow').addEventListener('click', () => setStyle({ shadow: !style.shadow }));
+
   $('#delete').addEventListener('click', deleteSelected);
+  $('#duplicate').addEventListener('click', duplicateSelected);
+  $('#to-front').addEventListener('click', () => reorderSelected(true));
+  $('#to-back').addEventListener('click', () => reorderSelected(false));
   $('#reset-crop').addEventListener('click', () => {
     commitChange(() => (doc.crop = null));
     resizeView();
@@ -953,27 +1601,33 @@ function setupToolbar() {
   syncStylebar();
 }
 
+function svgEl(name, attrs) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
 function setTool(next) {
   if (editing) commitText();
   tool = next;
+  hoverId = null;
   document.querySelectorAll('[data-tool]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tool === tool)));
   stage.dataset.tool = tool;
   overlay.style.cursor = '';
   // Picking a drawing tool starts something new, so let go of the current selection.
-  if (tool !== 'select') select(null);
-  syncStylebar();
+  if (tool !== 'select' || !selected()) select(null);
+  else syncStylebar();
 }
 
 // Changes the current style, and the selected annotation's style if there is one.
-// `preview` is true while the colour picker is being dragged: those changes share one undo step.
+// `preview` is true while a colour picker or slider is being dragged: those changes share one undo step.
 let previewingStyle = false;
 function setStyle(patch, preview = false) {
   Object.assign(style, patch);
   const s = selected() || editing?.shape;
   if (s) {
-    const relevant = Object.fromEntries(
-      Object.entries(patch).filter(([k]) => (k === 'fill' ? FILL_TYPES.has(s.type) : !(k === 'size' && s.type === 'blur'))),
-    );
+    const keys = new Set(['color', 'size', ...optionKeys(s.type, { ...s, ...patch })]);
+    const relevant = Object.fromEntries(Object.entries(patch).filter(([k]) => keys.has(k)));
     if (Object.entries(relevant).some(([k, v]) => s[k] !== v)) {
       const before = bounds(s);
       if (editing?.shape === s) {
@@ -987,21 +1641,42 @@ function setStyle(patch, preview = false) {
       }
     }
   }
+  // Styles picked while using a drawing tool become that tool's defaults.
+  if (!['select', 'eraser', 'crop'].includes(tool)) rememberStyle(patch);
   previewingStyle = preview && !!s && editing?.shape !== s;
   syncStylebar();
 }
 
+// The options the style bar shows right now.
+function barOptions() {
+  const s = selected() || editing?.shape;
+  if (s) return optionKeys(s.type, s);
+  if (tool === 'eraser') return ['eraser-hint'];
+  if (tool === 'select' || tool === 'crop') return [];
+  const keys = optionKeys(typeForTool(tool), style);
+  return tool === 'highlight' ? ['hlmode', ...keys] : keys;
+}
+
 function syncStylebar() {
+  const keys = new Set(barOptions());
+  stylebar.querySelectorAll('.opt').forEach((el) => (el.hidden = !keys.has(el.dataset.opt)));
   document.querySelectorAll('[data-color]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.color === style.color)));
   const custom = ![...document.querySelectorAll('[data-color]')].some((b) => b.dataset.color === style.color);
   $('.swatch.custom').setAttribute('aria-pressed', String(custom));
-  document.querySelectorAll('[data-size]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === style.size)));
-  $('#fill').setAttribute('aria-pressed', String(style.fill));
-  const s = selected();
-  const fillTarget = s ? s.type : tool;
-  stylebar.classList.toggle('show-fill', FILL_TYPES.has(fillTarget));
-  stylebar.classList.toggle('has-selection', !!s);
+  if (custom) $('#custom-color').value = style.color;
+  document.querySelectorAll('.seg[data-opt]').forEach((group) => {
+    const value = String(style[group.dataset.opt]);
+    group.querySelectorAll('button[data-val]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.val === value)));
+  });
+  $('#size').value = style.size;
+  $('#size-out').textContent = style.size;
+  $('#opacity').value = Math.round(style.opacity * 100);
+  $('#opacity-out').textContent = `${Math.round(style.opacity * 100)}%`;
+  $('#shadow').setAttribute('aria-pressed', String(!!style.shadow));
+  const hasSelection = !!selected() && !editing;
+  stylebar.classList.toggle('has-selection', hasSelection);
   stylebar.classList.toggle('crop-mode', tool === 'crop');
+  stylebar.classList.toggle('is-empty', !keys.size && !hasSelection && tool !== 'crop');
 }
 
 // ---- Keyboard ----
@@ -1028,6 +1703,9 @@ function setupKeys() {
     } else if (mod && key === 'c' && !window.getSelection()?.toString()) {
       e.preventDefault();
       copyImage();
+    } else if (mod && key === 'd') {
+      e.preventDefault();
+      duplicateSelected();
     } else if (mod && (key === '=' || key === '+')) {
       e.preventDefault();
       zoomStep(1);
@@ -1045,6 +1723,8 @@ function setupKeys() {
     } else if (e.key === 'Escape') {
       if (selected()) select(null);
       else setTool('select');
+    } else if ((e.key === '[' || e.key === ']') && selected()) {
+      reorderSelected(e.key === ']');
     } else if (e.key.startsWith('Arrow') && selected()) {
       e.preventDefault();
       const step = screenPx(e.shiftKey ? 10 : 1);

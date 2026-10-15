@@ -1,0 +1,33 @@
+Take a screenshot of anything in your browser, mark it up in seconds, and save it as PNG, JPG or PDF. Free, works offline, and needs no account.
+
+CAPTURE
+• Select area – drag over any part of the page (Ctrl+Shift+S, or ⌘+Shift+S on Mac)
+• Visible part – exactly what you see
+• Full page – scrolls and stitches the whole page into one image. Sticky headers appear only once. It even works in apps where only a panel scrolls, like web inboxes and dashboards.
+• Screen or window – capture another app, a whole monitor or another tab
+• Delay of 3, 5 or 10 seconds, for menus and hover states
+• Right-click menu, toolbar button and keyboard shortcuts
+• Open image – annotate any image you drop, paste or choose
+
+ANNOTATE (17 tools)
+• Pen and brush, highlighter (freehand or box)
+• Line and arrow: classic or tapered, one or two heads, and curved by dragging the middle
+• Rectangle and ellipse, with no fill, a light fill or a solid fill
+• Text, callout bubbles, numbered steps that renumber themselves, and stamps (tick, cross, star, heart and more)
+• Spotlight to dim everything except what matters, and a magnifier
+• Blur, pixelate or black out emails, names and numbers before you share
+• 10 colours plus any custom colour, size and opacity sliders, dashed and dotted lines, drop shadows
+• Every annotation stays editable: move, resize, recolour, duplicate, reorder or delete it
+• Undo and redo, crop, zoom, and keyboard shortcuts for every tool
+
+SAVE AND SHARE
+• PNG, JPG, or PDF (A4, Letter or one long page)
+• Copy to the clipboard and paste into chat, email or docs
+• Choose what happens after a capture: open the editor, save straight away or copy
+
+PRIVATE BY DESIGN
+• Everything happens on your computer. Nothing is uploaded.
+• No account, no analytics, no tracking, no ads
+• Only asks for access to a tab when you start a capture
+
+Works in Chrome, Edge, Brave and other Chromium browsers.
