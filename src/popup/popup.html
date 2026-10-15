@@ -3,32 +3,61 @@
   <head>
     <meta charset="utf-8" />
     <title>Capture and Annotate</title>
+    <link rel="stylesheet" href="../shared/base.css" />
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
     <header>
-      <img src="../../icons/icon32.png" alt="" width="20" height="20" />
-      <span>Capture and Annotate</span>
+      <img src="../../icons/icon32.png" alt="" width="22" height="22" />
+      <h1>Capture and Annotate</h1>
+      <button class="icon-button" id="settings" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>
+      </button>
     </header>
+
     <main>
-      <button data-mode="area" data-command="capture-area">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4" /><rect x="8" y="8" width="8" height="8" rx="1" /></svg>
-        <span class="label">Select area</span>
+      <button class="tile primary crop-marks" data-mode="area" data-command="capture-area">
+        <span class="title">Select area</span>
+        <span class="sub">Drag over any part of the page</span>
         <kbd></kbd>
       </button>
-      <button data-mode="visible" data-command="capture-visible">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18" /></svg>
-        <span class="label">Visible part</span>
-        <kbd></kbd>
-      </button>
-      <button data-mode="full" data-command="capture-full">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M9 7h6M9 11h6M9 15h4" /></svg>
-        <span class="label">Full page</span>
-        <kbd></kbd>
-      </button>
+
+      <div class="grid">
+        <button class="tile crop-marks" data-mode="visible" data-command="capture-visible">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 9h18" /></svg>
+          <span class="title">Visible part</span>
+          <kbd></kbd>
+        </button>
+        <button class="tile crop-marks" data-mode="full" data-command="capture-full">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2" /><path d="M9 7h6M9 11h6M9 15h4" /></svg>
+          <span class="title">Full page</span>
+          <kbd></kbd>
+        </button>
+        <button class="tile crop-marks" data-mode="screen" data-command="capture-screen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
+          <span class="title">Screen or window</span>
+          <kbd></kbd>
+        </button>
+        <button class="tile crop-marks" id="open-image">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-5-5L5 21" /></svg>
+          <span class="title">Open image</span>
+        </button>
+      </div>
+
+      <div class="delay" role="group" aria-labelledby="delay-label">
+        <span id="delay-label">Delay</span>
+        <div class="segmented">
+          <button data-delay="0">Off</button>
+          <button data-delay="3">3s</button>
+          <button data-delay="5">5s</button>
+          <button data-delay="10">10s</button>
+        </div>
+      </div>
+      <p class="note" id="delay-note" hidden>Visible part and full page wait before capturing, so you can open menus first.</p>
     </main>
+
     <footer>
-      <a href="#" id="shortcuts">Change shortcuts</a>
+      <a href="#" id="shortcuts">Keyboard shortcuts</a>
     </footer>
     <script src="popup.js" type="module"></script>
   </body>

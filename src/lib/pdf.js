@@ -1,44 +1,64 @@
 // Minimal PDF writer: one JPEG image per page, no dependencies.
 
-const A4_WIDTH = 595.28; // points
-const A4_HEIGHT = 841.89;
+const PAGE_SIZES = { a4: [595.28, 841.89], letter: [612, 792] }; // points
+const MARGIN = 24; // points; keeps printers from clipping the edges
+const MAX_PAGE = 14400; // largest page side most PDF readers accept
 
-// Splits a (possibly very tall) canvas into A4-width pages and returns a PDF Blob.
-export async function canvasToPdf(canvas, quality = 0.92) {
-  const scale = A4_WIDTH / canvas.width;
-  const sliceHeight = Math.floor(A4_HEIGHT / scale);
+// Turns a canvas into a PDF Blob.
+// pageSize 'a4' | 'letter': long images are split across pages, wide ones go landscape.
+// pageSize 'fit': one page the size of the image (cssWidth = its width on screen, in CSS px).
+export async function canvasToPdf(canvas, { pageSize = 'a4', quality = 0.92, cssWidth = canvas.width } = {}) {
   const slices = [];
-  if (canvas.height <= sliceHeight) {
-    slices.push({ sy: 0, sh: canvas.height, pageHeight: canvas.height * scale });
+  if (pageSize === 'fit') {
+    let width = cssWidth * 0.75; // 96 CSS px per inch, 72 points per inch
+    let height = (width * canvas.height) / canvas.width;
+    const shrink = Math.min(1, MAX_PAGE / width, MAX_PAGE / height);
+    width *= shrink;
+    height *= shrink;
+    slices.push({ sy: 0, sh: canvas.height, pageWidth: width, pageHeight: height, x: 0, y: 0, w: width, h: height });
   } else {
+    let [pageWidth, pageHeight] = PAGE_SIZES[pageSize] || PAGE_SIZES.a4;
+    if (canvas.width > canvas.height) [pageWidth, pageHeight] = [pageHeight, pageWidth];
+    const boxWidth = pageWidth - 2 * MARGIN;
+    const boxHeight = pageHeight - 2 * MARGIN;
+    // Scale to the page width, but never enlarge small captures past their on-screen size.
+    const scale = Math.min(boxWidth / canvas.width, (cssWidth * 0.75) / canvas.width);
+    const sliceHeight = Math.max(1, Math.floor(boxHeight / scale));
+    const drawWidth = canvas.width * scale;
     for (let sy = 0; sy < canvas.height; sy += sliceHeight) {
-      slices.push({ sy, sh: Math.min(sliceHeight, canvas.height - sy), pageHeight: A4_HEIGHT });
+      const sh = Math.min(sliceHeight, canvas.height - sy);
+      slices.push({ sy, sh, pageWidth, pageHeight, x: (pageWidth - drawWidth) / 2, y: MARGIN, w: drawWidth, h: sh * scale });
     }
   }
 
   const pages = [];
   const slice = document.createElement('canvas');
   const ctx = slice.getContext('2d');
-  for (const { sy, sh, pageHeight } of slices) {
+  for (const s of slices) {
     slice.width = canvas.width;
-    slice.height = sh;
+    slice.height = s.sh;
     ctx.fillStyle = '#fff'; // JPEG has no transparency
-    ctx.fillRect(0, 0, slice.width, sh);
-    ctx.drawImage(canvas, 0, sy, canvas.width, sh, 0, 0, canvas.width, sh);
+    ctx.fillRect(0, 0, slice.width, s.sh);
+    ctx.drawImage(canvas, 0, s.sy, canvas.width, s.sh, 0, 0, canvas.width, s.sh);
     const blob = await new Promise((r) => slice.toBlob(r, 'image/jpeg', quality));
     pages.push({
       jpeg: new Uint8Array(await blob.arrayBuffer()),
       width: canvas.width,
-      height: sh,
-      pageWidth: A4_WIDTH,
-      pageHeight,
-      drawHeight: sh * scale,
+      height: s.sh,
+      pageWidth: s.pageWidth,
+      pageHeight: s.pageHeight,
+      // Image placement on the page, from the top-left corner.
+      x: s.x,
+      y: s.y,
+      drawWidth: s.w,
+      drawHeight: s.h,
     });
   }
   return new Blob([buildPdf(pages)], { type: 'application/pdf' });
 }
 
-// pages: [{ jpeg: Uint8Array, width, height (pixels), pageWidth, pageHeight, drawHeight (points) }]
+// pages: [{ jpeg: Uint8Array, width, height (pixels), pageWidth, pageHeight, x, y, drawWidth, drawHeight (points) }]
+// x/y are measured from the top-left of the page.
 export function buildPdf(pages) {
   const encoder = new TextEncoder();
   const chunks = [];
@@ -71,7 +91,7 @@ export function buildPdf(pages) {
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${n(p.pageWidth)} ${n(p.pageHeight)}] ` +
         `/Resources << /XObject << /Im0 ${num + 2} 0 R >> >> /Contents ${num + 1} 0 R >>`,
     );
-    const content = `q ${n(p.pageWidth)} 0 0 ${n(p.drawHeight)} 0 ${n(p.pageHeight - p.drawHeight)} cm /Im0 Do Q`;
+    const content = `q ${n(p.drawWidth)} 0 0 ${n(p.drawHeight)} ${n(p.x)} ${n(p.pageHeight - p.y - p.drawHeight)} cm /Im0 Do Q`;
     object(num + 1, `<< /Length ${content.length} >>\nstream\n`, content, '\nendstream');
     object(
       num + 2,

@@ -1,88 +1,124 @@
 import { putCapture } from './lib/store.js';
+import { getSettings } from './lib/settings.js';
 
 // Chrome allows ~2 captureVisibleTab calls per second; stay just under it.
 const CAPTURE_INTERVAL_MS = 550;
 // Safety limit for endless/infinite-scroll pages.
 const MAX_TILES = 60;
 
+const MENU_ITEMS = [
+  ['area', 'Select area'],
+  ['visible', 'Capture visible part'],
+  ['full', 'Capture full page'],
+  ['screen', 'Capture screen or window'],
+];
+
 let lastCaptureAt = 0;
 let busy = false;
 
-chrome.commands.onCommand.addListener(async (command, tab) => {
-  const mode = { 'capture-area': 'area', 'capture-visible': 'visible', 'capture-full': 'full' }[command];
-  if (mode && tab) start(mode, tab);
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    const contexts = ['page', 'frame', 'selection', 'link', 'image', 'video'];
+    chrome.contextMenus.create({ id: 'root', title: 'Capture and Annotate', contexts });
+    for (const [mode, title] of MENU_ITEMS) {
+      chrome.contextMenus.create({ id: mode, parentId: 'root', title, contexts });
+    }
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (tab) start(info.menuItemId, tab);
+});
+
+chrome.commands.onCommand.addListener((command, tab) => {
+  const mode = command.replace('capture-', '');
+  if (tab) start(mode, tab);
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'capture') {
     chrome.tabs.get(msg.tabId).then((tab) => start(msg.mode, tab));
   } else if (msg.type === 'area-selected' && sender.tab) {
-    finishArea(sender.tab, msg.rect, msg.viewWidth);
+    run(sender.tab, async () => {
+      const dataUrl = await captureTab(sender.tab.windowId);
+      await openEditor(sender.tab, { mode: 'area', tiles: [{ dataUrl, y: 0 }], rect: msg.rect, viewWidth: msg.viewWidth });
+    });
   }
   sendResponse({ ok: true });
 });
 
-async function start(mode, tab) {
+function start(mode, tab) {
+  if (mode === 'area') {
+    // The overlay script reports back with an 'area-selected' message.
+    chrome.scripting
+      .executeScript({ target: { tabId: tab.id }, files: ['src/inject/select.js'] })
+      .catch((err) => showError(tab, err));
+  } else if (mode === 'screen') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/screen/screen.html'), index: tab.index + 1 });
+  } else if (mode === 'visible' || mode === 'full') {
+    run(tab, async () => {
+      const { delaySeconds, hideStickyHeaders } = await getSettings();
+      await countdown(tab, delaySeconds);
+      if (mode === 'visible') {
+        const view = await exec(tab, () => ({ viewWidth: window.innerWidth })).catch(() => ({}));
+        const dataUrl = await captureTab(tab.windowId);
+        await openEditor(tab, { mode, tiles: [{ dataUrl, y: 0 }], ...view });
+      } else {
+        await captureFullPage(tab, hideStickyHeaders);
+      }
+    });
+  }
+}
+
+async function run(tab, job) {
   if (busy) return;
+  busy = true;
   try {
-    if (mode === 'area') {
-      // The overlay script reports back with an 'area-selected' message.
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['src/inject/select.js'] });
-    } else if (mode === 'visible') {
-      busy = true;
-      const dataUrl = await captureTab(tab.windowId);
-      await openEditor(tab, { mode, tiles: [{ dataUrl, y: 0 }] });
-    } else if (mode === 'full') {
-      busy = true;
-      await captureFullPage(tab);
-    }
+    await job();
   } catch (err) {
     showError(tab, err);
   } finally {
     busy = false;
+    setBadge(tab.id, '');
   }
 }
 
-async function finishArea(tab, rect, viewWidth) {
-  try {
-    busy = true;
-    const dataUrl = await captureTab(tab.windowId);
-    await openEditor(tab, { mode: 'area', tiles: [{ dataUrl, y: 0 }], rect, viewWidth });
-  } catch (err) {
-    showError(tab, err);
-  } finally {
-    busy = false;
+async function countdown(tab, seconds) {
+  for (let s = seconds; s > 0; s--) {
+    setBadge(tab.id, String(s), '#2f4cdd');
+    await sleep(1000);
   }
+  setBadge(tab.id, '');
 }
 
-async function captureFullPage(tab) {
-  const target = { tabId: tab.id };
-  const exec = async (func, args = []) =>
-    (await chrome.scripting.executeScript({ target, func, args }))[0].result;
+async function exec(tab, func, args = []) {
+  const [result] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func, args });
+  return result.result;
+}
 
-  const page = await exec(preparePage);
+async function captureFullPage(tab, hideSticky) {
+  const page = await exec(tab, preparePage);
   const tiles = [];
   try {
     let y = 0;
     for (let i = 0; i < MAX_TILES; i++) {
-      const actualY = await exec(scrollPageTo, [y, i > 0]);
+      const actualY = await exec(tab, scrollPageTo, [y, hideSticky && i > 0]);
       // The page stopped scrolling (bottom reached or the page shrank).
       if (i > 0 && actualY <= tiles[i - 1].y) break;
-      setBadge(tab.id, String(i + 1), '#2563eb');
+      setBadge(tab.id, String(i + 1), '#2f4cdd');
       tiles.push({ dataUrl: await captureTab(tab.windowId), y: actualY });
       if (actualY + page.viewHeight >= page.totalHeight) break;
       y = actualY + page.viewHeight;
     }
   } finally {
-    await exec(restorePage).catch(() => {});
-    setBadge(tab.id, '');
+    await exec(tab, restorePage).catch(() => {});
   }
   await openEditor(tab, { mode: 'full', tiles, viewWidth: page.viewWidth, viewHeight: page.viewHeight });
 }
 
 async function captureTab(windowId) {
   const wait = lastCaptureAt + CAPTURE_INTERVAL_MS - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  if (wait > 0) await sleep(wait);
   lastCaptureAt = Date.now();
   return chrome.tabs.captureVisibleTab(windowId, { format: 'png' });
 }
@@ -103,14 +139,20 @@ function setBadge(tabId, text, color) {
 
 function showError(tab, err) {
   console.warn('Capture and Annotate:', err);
-  const restricted = /cannot (access|be scripted)|chrome:\/\/|webstore|extensions gallery/i.test(String(err?.message));
-  const message = restricted ? 'Chrome does not allow capturing this page.' : `Capture failed: ${err?.message || err}`;
-  setBadge(tab.id, '!', '#dc2626');
+  const restricted = /cannot (access|be scripted)|chrome:\/\/|about:|webstore|extensions gallery|missing host permission|addons\.mozilla/i.test(
+    String(err?.message),
+  );
+  const message = restricted ? 'This browser does not allow capturing this page.' : `Capture failed: ${err?.message || err}`;
+  setBadge(tab.id, '!', '#e5383b');
   chrome.action.setTitle({ tabId: tab.id, title: `Capture and Annotate – ${message}` }).catch(() => {});
   setTimeout(() => {
     setBadge(tab.id, '');
     chrome.action.setTitle({ tabId: tab.id, title: 'Capture and Annotate' }).catch(() => {});
   }, 5000);
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 // ---- Functions below are injected into the page; they must be self-contained. ----

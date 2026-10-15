@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Capture and Annotate settings</title>
+    <link rel="icon" href="../../icons/icon32.png" />
+    <link rel="stylesheet" href="../shared/base.css" />
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <img src="../../icons/icon48.png" alt="" width="40" height="40" />
+        <div>
+          <h1>Settings</h1>
+          <p>Changes save automatically and sync to your other browsers.</p>
+        </div>
+      </header>
+
+      <section>
+        <h2>After capturing</h2>
+        <div class="choices" data-setting="afterCapture">
+          <label><input type="radio" name="afterCapture" value="edit" /><span><b>Open the editor</b>Annotate, crop or blur before saving.</span></label>
+          <label><input type="radio" name="afterCapture" value="save" /><span><b>Save right away</b>Downloads in your default format. The editor still opens if you want changes.</span></label>
+          <label><input type="radio" name="afterCapture" value="copy" /><span><b>Copy to clipboard</b>Ready to paste into chat, email or docs.</span></label>
+        </div>
+      </section>
+
+      <section>
+        <h2>Saving</h2>
+        <div class="row">
+          <div>
+            <b>Default format</b>
+            <p>Used by Ctrl+S and “Save right away”.</p>
+          </div>
+          <div class="segmented" data-setting="saveFormat">
+            <button value="png">PNG</button><button value="jpg">JPG</button><button value="pdf">PDF</button>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <b>JPG and PDF quality</b>
+            <p>Lower makes smaller files.</p>
+          </div>
+          <div class="range">
+            <input type="range" id="jpgQuality" min="50" max="100" step="1" />
+            <output id="jpgQualityValue"></output>
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <b>PDF pages</b>
+            <p>Long captures split across pages. “One page” keeps everything on a single page.</p>
+          </div>
+          <div class="segmented" data-setting="pdfPageSize">
+            <button value="a4">A4</button><button value="letter">Letter</button><button value="fit">One page</button>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>Full-page capture</h2>
+        <label class="row toggle">
+          <div>
+            <b>Show sticky headers only once</b>
+            <p>Hides menus that stay on screen while scrolling, so they don’t repeat down the page.</p>
+          </div>
+          <input type="checkbox" id="hideStickyHeaders" role="switch" />
+        </label>
+      </section>
+
+      <section>
+        <h2>Keyboard shortcuts</h2>
+        <ul id="shortcut-list"></ul>
+        <button class="secondary" id="change-shortcuts">Change shortcuts</button>
+        <p class="shortcut-help" id="shortcut-help" hidden>In Firefox, open <b>about:addons</b>, click the gear icon, then choose <b>Manage Extension Shortcuts</b>.</p>
+      </section>
+
+      <p class="privacy">Everything happens on this computer. Captures are never uploaded, and the extension makes no network requests.</p>
+    </main>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="options.js" type="module"></script>
+  </body>
+</html>

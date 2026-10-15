@@ -1,52 +1,81 @@
 # Capture and Annotate
 
-A Chrome extension to capture a selected area, the visible screen or a full scrolling page, make quick edits, and save the result as **PNG, JPG or PDF**. It works offline, with no account and no tracking.
+A browser extension for **Chrome and Firefox** that captures any part of a page, a full scrolling page or any window on your screen. You can then mark it up with arrows, text, numbered steps and blur, and save it as **PNG, JPG or PDF**. It works offline, with no account and no tracking.
 
 ## Features
 
-- **Select area** with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> on Mac). Drag to select, press <kbd>Enter</kbd> for the whole screen or <kbd>Esc</kbd> to cancel.
-- **Visible part** and **Full page** from the toolbar popup. Shortcuts for these can be set at `chrome://extensions/shortcuts`.
-- Full-page capture scrolls the page and stitches the screenshots together. Sticky headers appear only once.
-- **Editor tools:** crop, pen, highlighter, rectangle, arrow, text and blur (pixelate, for hiding private info). It also has undo/redo, 6 colours and 3 sizes.
-- **Export:** PNG, JPG, a PDF with long pages split across A4 pages, or copy to the clipboard.
+**Capture**
+- **Select area**: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> (<kbd>⌘</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> on Mac). Drag to select, <kbd>Enter</kbd> for the whole screen, <kbd>Esc</kbd> to cancel.
+- **Visible part** and **Full page**. Full page scrolls and stitches the page, and sticky headers appear only once.
+- **Screen or window**: capture another app, a whole monitor or another tab.
+- **Delay** of 3, 5 or 10 seconds, to capture menus and hover states.
+- **Right-click menu** on any page, plus the toolbar popup and keyboard shortcuts.
+- **Open image**: annotate any image you drop, paste or choose.
 
-Editor shortcuts: <kbd>C</kbd> crop · <kbd>P</kbd> pen · <kbd>H</kbd> highlight · <kbd>R</kbd> rectangle · <kbd>A</kbd> arrow · <kbd>T</kbd> text · <kbd>B</kbd> blur · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>S</kbd> save PNG · <kbd>Ctrl</kbd>+<kbd>C</kbd> copy.
+**Annotate**
+- Pen, highlighter, line, arrow, rectangle, ellipse, numbered steps (they renumber automatically), text, blur and crop.
+- Everything stays editable: select an annotation to move it, resize it, recolour it or delete it. Double-click text to edit it.
+- 6 colours plus a custom colour, 3 sizes, and an optional fill for shapes and text labels.
+- Undo and redo, zoom, and <kbd>Shift</kbd> to snap lines to 45° or draw perfect squares and circles.
+
+**Save**
+- PNG, JPG, or PDF (A4, Letter, or one long page), or copy to the clipboard.
+- Settings for what happens after a capture (open the editor, save right away or copy), the default format and the quality.
+
+Press <kbd>?</kbd> in the editor to see every shortcut.
 
 ## Try it locally
 
+**Chrome, Edge or Brave**
 1. Open `chrome://extensions` and turn on **Developer mode**.
 2. Click **Load unpacked** and pick this folder.
-3. Pin Capture and Annotate to the toolbar, open any website and press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>.
 
-After changing the code, click the reload icon on the Capture and Annotate card in `chrome://extensions`.
+**Firefox**
+1. Run `node scripts/build.mjs`.
+2. Open `about:debugging#/runtime/this-firefox`, click **Load Temporary Add-on** and pick `dist/firefox/manifest.json`.
+
+## Build for the stores
+
+```
+node scripts/build.mjs
+```
+
+This creates `dist/chrome/`, `dist/firefox/` and a zip for each store:
+
+- `dist/capture-and-annotate-chrome-<version>.zip` goes to the [Chrome Web Store](https://chrome.google.com/webstore/devconsole) (also works for the Edge Add-ons store).
+- `dist/capture-and-annotate-firefox-<version>.zip` goes to [Firefox Add-ons](https://addons.mozilla.org/developers/).
+
+The root `manifest.json` is the Chrome version. The build script adapts it for Firefox: it switches to a background script, adds the add-on ID and data-collection declaration, and shortens the name to fit Firefox's 45-character limit.
+
+Before uploading:
+- Bump `version` in `manifest.json` for every release.
+- Run `npx web-ext lint --source-dir dist/firefox` to check the Firefox build.
+- For the privacy section in both stores, state that no data is collected and link to [`PRIVACY.md`](PRIVACY.md).
 
 ## Project layout
 
 ```
-manifest.json          Extension manifest (MV3)
-src/background.js      Service worker: shortcuts, capturing, full-page scrolling
-src/inject/select.js   Area-selection overlay injected into the page
-src/popup/             Toolbar popup
-src/editor/            Editor page (canvas tools, saving)
-src/lib/pdf.js         Small built-in PDF writer (no dependencies)
-src/lib/store.js       IndexedDB hand-off from service worker to editor
-scripts/make-icons.py  Regenerates icons/ (needs Pillow)
-scripts/package.sh     Builds the Web Store zip into dist/
-test/pdf.test.mjs      Checks generated PDFs with qpdf
+manifest.json            Extension manifest (Chrome; build adapts it for Firefox)
+src/background.js        Shortcuts, right-click menu, capturing, full-page scrolling
+src/inject/select.js     Area-selection overlay injected into the page
+src/popup/               Toolbar popup
+src/editor/              Editor: tools, editable annotations, zoom, saving
+src/screen/              Screen or window capture page
+src/options/             Settings page
+src/shared/base.css      Colours, type and the crop-mark style shared by all pages
+src/lib/pdf.js           Small built-in PDF writer (no dependencies)
+src/lib/store.js         Hands captures from the background to the editor (IndexedDB)
+src/lib/settings.js      Settings defaults and storage
+fonts/                   Instrument Sans (SIL Open Font License)
+scripts/build.mjs        Builds Chrome and Firefox packages into dist/
+scripts/make-icons.py    Regenerates icons/ (needs Pillow)
+test/pdf.test.mjs        Checks generated PDFs with qpdf
 ```
 
-No build step and no third-party code. Plain JavaScript runs as-is, which keeps Web Store review simple.
-
-## Publishing to the Chrome Web Store
-
-1. Run `scripts/package.sh` to create `dist/capture-and-annotate-<version>.zip`.
-2. Register at the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole). There's a one-time US$5 fee.
-3. Upload the zip and fill in the listing. You'll need at least one 1280×800 screenshot, a 440×280 promo tile and the 128px icon.
-4. **Privacy tab:** state that no user data is collected, explain the two permissions (the wording is in `PRIVACY.md`), and link to a public copy of `PRIVACY.md` (for example on GitHub).
-5. Bump `version` in `manifest.json` for every update.
+There's no build step for development and no third-party code, just plain JavaScript.
 
 ## Known limits
 
-- Chrome blocks extensions on `chrome://` pages, the Chrome Web Store and other extensions' pages. The toolbar icon shows a red **!** there.
-- Full-page capture scrolls the main page. Apps that scroll inside an inner panel (Gmail, Google Docs, some dashboards) only capture what is visible.
-- Pages taller than Chrome's canvas limit (about 32,000 px) are scaled down to fit.
+- Browsers block extensions on their own pages (`chrome://`, `about:`) and on the extension stores. The toolbar icon shows a red **!** there.
+- Full-page capture scrolls the main page. Apps that scroll inside a panel (Gmail, Google Docs) capture only what is visible.
+- Pages taller than the browser's canvas limit (about 32,000 px) are scaled down to fit.

@@ -1,0 +1,41 @@
+body {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--table);
+}
+main {
+  width: min(440px, calc(100% - 32px));
+  padding: 36px 32px 28px;
+  border-radius: 14px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+.frame {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  color: var(--cobalt);
+  --mark-opacity: 1;
+  --mark-inset: 0px;
+}
+.frame svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+h1 { margin: 0 0 8px; font-size: 21px; font-weight: 650; letter-spacing: -0.015em; }
+p { margin: 0 auto; max-width: 34ch; color: var(--ink-2); }
+button.primary {
+  margin-top: 22px;
+  height: 42px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: var(--radius-s);
+  background: var(--cobalt);
+  color: var(--cobalt-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+button.primary:hover { filter: brightness(1.08); }
+button.primary:disabled { opacity: 0.6; cursor: default; }
+#status { margin-top: 14px; min-height: 1.45em; font-size: 13px; color: var(--ink-3); }

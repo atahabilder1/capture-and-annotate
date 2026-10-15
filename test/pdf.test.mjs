@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildPdf } from '../src/lib/pdf.js';
 
-const dir = mkdtempSync(join(tmpdir(), 'capture-and-annotate-'));
+const dir = mkdtempSync(join(tmpdir(), 'capture-annotate-'));
 const jpeg = (w, h, color) => {
   const file = join(dir, `${w}x${h}-${color}.jpg`);
   execFileSync('convert', ['-size', `${w}x${h}`, `xc:${color}`, file]);
@@ -14,10 +14,10 @@ const jpeg = (w, h, color) => {
 };
 
 const cases = {
-  single: [{ jpeg: jpeg(400, 300, 'red'), width: 400, height: 300, pageWidth: 595.28, pageHeight: 446.46, drawHeight: 446.46 }],
+  single: [{ jpeg: jpeg(400, 300, 'red'), width: 400, height: 300, pageWidth: 595.28, pageHeight: 446.46, x: 0, y: 0, drawWidth: 595.28, drawHeight: 446.46 }],
   multi: [
-    { jpeg: jpeg(800, 1131, 'blue'), width: 800, height: 1131, pageWidth: 595.28, pageHeight: 841.89, drawHeight: 841.58 },
-    { jpeg: jpeg(800, 400, 'green'), width: 800, height: 400, pageWidth: 595.28, pageHeight: 841.89, drawHeight: 297.64 },
+    { jpeg: jpeg(800, 1131, 'blue'), width: 800, height: 1131, pageWidth: 595.28, pageHeight: 841.89, x: 24, y: 24, drawWidth: 547.28, drawHeight: 773.7 },
+    { jpeg: jpeg(800, 400, 'green'), width: 800, height: 400, pageWidth: 595.28, pageHeight: 841.89, x: 24, y: 24, drawWidth: 547.28, drawHeight: 273.64 },
   ],
 };
 

@@ -9,19 +9,31 @@
   const root = host.attachShadow({ mode: 'closed' });
   root.innerHTML = `
     <style>
-      .layer { position: fixed; inset: 0; cursor: crosshair; background: rgba(15, 23, 42, 0.4); }
+      .layer { position: fixed; inset: 0; cursor: crosshair; background: rgba(18, 22, 29, 0.42); }
       .layer.dragging { background: transparent; }
-      .box { position: fixed; display: none; border: 1.5px solid #fff; outline: 1px solid #2563eb;
-             box-shadow: 0 0 0 100vmax rgba(15, 23, 42, 0.4); pointer-events: none; }
-      .size { position: absolute; left: 0; top: -26px; padding: 3px 7px; border-radius: 4px;
-              font: 12px/1.2 system-ui, sans-serif; color: #fff; background: #2563eb; white-space: nowrap; }
-      .hint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); padding: 8px 14px;
-              border-radius: 8px; font: 13px/1.3 system-ui, sans-serif; color: #fff;
-              background: rgba(15, 23, 42, 0.85); pointer-events: none; }
+      .box { position: fixed; display: none; outline: 1px solid rgba(255, 255, 255, 0.85);
+             box-shadow: 0 0 0 100vmax rgba(18, 22, 29, 0.42); pointer-events: none; }
+      .corner { position: absolute; width: 14px; height: 14px; border: 0 solid #2f4cdd; }
+      .tl { left: -4px; top: -4px; border-width: 3px 0 0 3px; }
+      .tr { right: -4px; top: -4px; border-width: 3px 3px 0 0; }
+      .bl { left: -4px; bottom: -4px; border-width: 0 0 3px 3px; }
+      .br { right: -4px; bottom: -4px; border-width: 0 3px 3px 0; }
+      .size { position: absolute; left: -4px; top: -32px; padding: 4px 8px; border-radius: 6px;
+              font: 600 12px/1.2 system-ui, sans-serif; font-variant-numeric: tabular-nums;
+              color: #fff; background: #2f4cdd; white-space: nowrap; }
+      .hint { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); padding: 9px 16px;
+              border-radius: 10px; font: 500 13px/1.3 system-ui, sans-serif; color: #e6e9ef;
+              background: rgba(27, 33, 43, 0.92); box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+              pointer-events: none; white-space: nowrap; }
+      .hint b { color: #fff; font-weight: 600; }
     </style>
     <div class="layer"></div>
-    <div class="box"><span class="size"></span></div>
-    <div class="hint">Drag to select an area &nbsp;·&nbsp; Enter: whole screen &nbsp;·&nbsp; Esc: cancel</div>
+    <div class="box">
+      <span class="corner tl"></span><span class="corner tr"></span>
+      <span class="corner bl"></span><span class="corner br"></span>
+      <span class="size"></span>
+    </div>
+    <div class="hint">Drag to select an area. <b>Enter</b> takes the whole screen, <b>Esc</b> cancels.</div>
   `;
   const layer = root.querySelector('.layer');
   const box = root.querySelector('.box');
@@ -53,7 +65,8 @@
       height: `${rect.height}px`,
     });
     size.textContent = `${Math.round(rect.width)} × ${Math.round(rect.height)}`;
-    size.style.top = y < 30 ? '4px' : '-26px';
+    size.style.top = y < 36 ? '6px' : '-32px';
+    size.style.left = y < 36 ? '6px' : '-4px';
   };
 
   const onUp = () => {

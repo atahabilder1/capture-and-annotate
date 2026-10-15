@@ -1,0 +1,88 @@
+/* Shared design tokens for every extension page (popup, editor, options, screen picker). */
+
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('../../fonts/instrument-sans.woff2') format('woff2');
+  font-weight: 400 700;
+  font-display: block;
+}
+
+:root {
+  --ink: #1b2433;
+  --ink-2: #4a5568;
+  --ink-3: #7b8597;
+  --paper: #ffffff;
+  --paper-2: #f3f5f8;
+  --table: #dfe3ea;
+  --rule: #d5dae3;
+  --cobalt: #2f4cdd;
+  --cobalt-ink: #ffffff;
+  --cobalt-wash: #e7ebfd;
+  --red: #e5383b;
+  --focus: #2f4cdd;
+  --shadow: 0 1px 2px rgb(27 36 51 / 0.08), 0 8px 24px -8px rgb(27 36 51 / 0.18);
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --font: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e6e9ef;
+    --ink-2: #b4bccb;
+    --ink-3: #848ea1;
+    --paper: #1b212b;
+    --paper-2: #232a36;
+    --table: #12161d;
+    --rule: #2e3644;
+    --cobalt: #7d93ff;
+    --cobalt-ink: #0e1430;
+    --cobalt-wash: #252f5c;
+    --focus: #9aabff;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px -8px rgb(0 0 0 / 0.6);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font: 400 14px/1.45 var(--font);
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+kbd {
+  font: 500 11px/1 var(--font);
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+}
+
+/* Crop-mark corners: the one visual motif, used on capture tiles and selections. */
+.crop-marks { position: relative; }
+.crop-marks::before {
+  content: '';
+  position: absolute;
+  inset: var(--mark-inset, 5px);
+  pointer-events: none;
+  border: 2px solid var(--mark-color, var(--cobalt));
+  opacity: var(--mark-opacity, 0);
+  transition: opacity 0.12s, inset 0.12s;
+  --c: linear-gradient(#000 0 0);
+  -webkit-mask: var(--c) top left / 10px 10px, var(--c) top right / 10px 10px,
+    var(--c) bottom left / 10px 10px, var(--c) bottom right / 10px 10px;
+  -webkit-mask-repeat: no-repeat;
+  mask: var(--c) top left / 10px 10px no-repeat, var(--c) top right / 10px 10px no-repeat,
+    var(--c) bottom left / 10px 10px no-repeat, var(--c) bottom right / 10px 10px no-repeat;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}

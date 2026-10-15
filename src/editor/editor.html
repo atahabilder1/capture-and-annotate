@@ -5,76 +5,170 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Capture and Annotate</title>
     <link rel="icon" href="../../icons/icon32.png" />
+    <link rel="stylesheet" href="../shared/base.css" />
     <link rel="stylesheet" href="editor.css" />
   </head>
-  <body>
-    <header class="toolbar">
-      <div class="group" role="toolbar" aria-label="Edit tools">
-        <button data-tool="crop" title="Crop (C)">
-          <svg viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2" /></svg>
-        </button>
-        <button data-tool="pen" title="Pen (P)">
-          <svg viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
-        </button>
-        <button data-tool="highlight" title="Highlighter (H)">
-          <svg viewBox="0 0 24 24"><path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" /></svg>
-        </button>
-        <button data-tool="rect" title="Rectangle (R)">
-          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1" /></svg>
-        </button>
-        <button data-tool="arrow" title="Arrow (A)">
-          <svg viewBox="0 0 24 24"><path d="M5 19 19 5M9 5h10v10" /></svg>
-        </button>
-        <button data-tool="text" title="Text (T)">
-          <svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16" /></svg>
-        </button>
-        <button data-tool="blur" title="Blur / hide (B)">
-          <svg viewBox="0 0 24 24"><path d="M3 3h6v6H3zM15 3h6v6h-6zM9 9h6v6H9zM3 15h6v6H3zM15 15h6v6h-6z" /></svg>
-        </button>
-      </div>
+  <body data-state="loading">
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-select" viewBox="0 0 24 24"><path d="m5 3 14 7.5-6.2 1.7L9.5 18.5Z" /></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></symbol>
+        <symbol id="i-highlight" viewBox="0 0 24 24"><path d="m9 11-6 6v3h9l3-3M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" /></symbol>
+        <symbol id="i-line" viewBox="0 0 24 24"><path d="M5 19 19 5" /></symbol>
+        <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 19 19 5M9 5h10v10" /></symbol>
+        <symbol id="i-rect" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1.5" /></symbol>
+        <symbol id="i-ellipse" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="7" /></symbol>
+        <symbol id="i-step" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M10.5 9.5 12.5 8v8.5" /></symbol>
+        <symbol id="i-text" viewBox="0 0 24 24"><path d="M5 7V5h14v2M9.5 19h5M12 5v14" /></symbol>
+        <symbol id="i-blur" viewBox="0 0 24 24"><path d="M4 4h5v5H4zM15 4h5v5h-5zM9.5 9.5h5v5h-5zM4 15h5v5H4zM15 15h5v5h-5z" /></symbol>
+        <symbol id="i-crop" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14M18 22V8a2 2 0 0 0-2-2H2" /></symbol>
+        <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></symbol>
+        <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></symbol>
+        <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" /></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14" /></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></symbol>
+        <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" /></symbol>
+        <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.7M12 17h.01" /></symbol>
+        <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-5-5L5 21" /></symbol>
+      </defs>
+    </svg>
 
-      <div class="group" aria-label="Style">
-        <div class="swatches">
-          <button class="swatch" data-color="#ef4444" style="--c: #ef4444" title="Red"></button>
-          <button class="swatch" data-color="#f59e0b" style="--c: #f59e0b" title="Yellow"></button>
-          <button class="swatch" data-color="#22c55e" style="--c: #22c55e" title="Green"></button>
-          <button class="swatch" data-color="#2563eb" style="--c: #2563eb" title="Blue"></button>
-          <button class="swatch" data-color="#111827" style="--c: #111827" title="Black"></button>
-          <label class="swatch custom" title="Custom colour">
-            <input type="color" id="custom-color" value="#a855f7" />
-          </label>
-        </div>
-        <div class="sizes">
-          <button data-size="s" title="Thin">S</button>
-          <button data-size="m" title="Medium">M</button>
-          <button data-size="l" title="Thick">L</button>
+    <header class="topbar">
+      <div class="doc">
+        <img src="../../icons/icon32.png" alt="" width="22" height="22" />
+        <div class="doc-text">
+          <div class="doc-title" id="doc-title">Capture and Annotate</div>
+          <div class="doc-meta" id="doc-meta"></div>
         </div>
       </div>
 
-      <div class="group">
-        <button id="undo" title="Undo (Ctrl+Z)" disabled>
-          <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></svg>
-        </button>
-        <button id="redo" title="Redo (Ctrl+Shift+Z)" disabled>
-          <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></svg>
-        </button>
+      <div class="cluster needs-image">
+        <button class="icon" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled><svg><use href="#i-undo" /></svg></button>
+        <button class="icon" id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled><svg><use href="#i-redo" /></svg></button>
       </div>
 
-      <div class="group save">
-        <button id="copy" class="text" title="Copy image (Ctrl+C)">Copy</button>
-        <button id="save-png" class="text" title="Save as PNG (Ctrl+S)">PNG</button>
-        <button id="save-jpg" class="text" title="Save as JPG">JPG</button>
-        <button id="save-pdf" class="text primary" title="Save as PDF">Save PDF</button>
+      <div class="cluster zoom needs-image">
+        <button class="icon" id="zoom-out" title="Zoom out (Ctrl+−)" aria-label="Zoom out"><svg><use href="#i-minus" /></svg></button>
+        <button class="zoom-label" id="zoom-fit" title="Fit to window (Ctrl+0)">100%</button>
+        <button class="icon" id="zoom-in" title="Zoom in (Ctrl++)" aria-label="Zoom in"><svg><use href="#i-plus" /></svg></button>
       </div>
+
+      <div class="cluster export needs-image">
+        <button class="ghost" id="copy" title="Copy image (Ctrl+C)"><svg><use href="#i-copy" /></svg>Copy</button>
+        <div class="save-group" role="group" aria-label="Save as">
+          <button data-save="png" title="Save as PNG">PNG</button>
+          <button data-save="jpg" title="Save as JPG">JPG</button>
+          <button data-save="pdf" title="Save as PDF">PDF</button>
+        </div>
+      </div>
+      <button class="icon help-button" id="help-open" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg><use href="#i-help" /></svg></button>
     </header>
 
-    <main id="workspace">
-      <div id="stage" hidden>
-        <canvas id="canvas"></canvas>
-        <canvas id="overlay"></canvas>
+    <div class="body">
+      <nav class="rail needs-image" role="toolbar" aria-label="Tools" aria-orientation="vertical">
+        <button data-tool="select" title="Select and move (V)" aria-label="Select"><svg><use href="#i-select" /></svg></button>
+        <hr />
+        <button data-tool="pen" title="Pen (P)" aria-label="Pen"><svg><use href="#i-pen" /></svg></button>
+        <button data-tool="highlight" title="Highlighter (H)" aria-label="Highlighter"><svg><use href="#i-highlight" /></svg></button>
+        <button data-tool="line" title="Line (L)" aria-label="Line"><svg><use href="#i-line" /></svg></button>
+        <button data-tool="arrow" title="Arrow (A)" aria-label="Arrow"><svg><use href="#i-arrow" /></svg></button>
+        <button data-tool="rect" title="Rectangle (R)" aria-label="Rectangle"><svg><use href="#i-rect" /></svg></button>
+        <button data-tool="ellipse" title="Ellipse (E)" aria-label="Ellipse"><svg><use href="#i-ellipse" /></svg></button>
+        <button data-tool="step" title="Numbered step (N)" aria-label="Numbered step"><svg><use href="#i-step" /></svg></button>
+        <button data-tool="text" title="Text (T)" aria-label="Text"><svg><use href="#i-text" /></svg></button>
+        <hr />
+        <button data-tool="blur" title="Blur to hide private info (B)" aria-label="Blur"><svg><use href="#i-blur" /></svg></button>
+        <button data-tool="crop" title="Crop (C)" aria-label="Crop"><svg><use href="#i-crop" /></svg></button>
+      </nav>
+
+      <main id="workspace">
+        <div class="stylebar needs-image" id="stylebar">
+          <div class="style-controls" id="style-controls">
+            <div class="swatches" role="group" aria-label="Colour">
+              <button class="swatch" data-color="#e5383b" style="--c: #e5383b" aria-label="Red"></button>
+              <button class="swatch" data-color="#f59f00" style="--c: #f59f00" aria-label="Amber"></button>
+              <button class="swatch" data-color="#2f9e44" style="--c: #2f9e44" aria-label="Green"></button>
+              <button class="swatch" data-color="#2f4cdd" style="--c: #2f4cdd" aria-label="Blue"></button>
+              <button class="swatch" data-color="#1b2433" style="--c: #1b2433" aria-label="Ink"></button>
+              <button class="swatch" data-color="#ffffff" style="--c: #ffffff" aria-label="White"></button>
+              <label class="swatch custom" title="Custom colour">
+                <input type="color" id="custom-color" value="#9c36b5" aria-label="Custom colour" />
+              </label>
+            </div>
+            <span class="divider"></span>
+            <div class="sizes" role="group" aria-label="Size">
+              <button data-size="s" title="Thin" aria-label="Thin"><i style="--d: 4px"></i></button>
+              <button data-size="m" title="Medium" aria-label="Medium"><i style="--d: 7px"></i></button>
+              <button data-size="l" title="Thick" aria-label="Thick"><i style="--d: 11px"></i></button>
+            </div>
+            <button class="fill-toggle" id="fill" aria-pressed="false" title="Fill shapes and add a background to text">Fill</button>
+          </div>
+          <div class="crop-controls" id="crop-controls">
+            <span>Drag over the image to crop it.</span>
+            <button class="ghost" id="reset-crop">Undo crop</button>
+          </div>
+          <span class="divider selection-only"></span>
+          <button class="icon selection-only" id="delete" title="Delete (Del)" aria-label="Delete"><svg><use href="#i-trash" /></svg></button>
+        </div>
+
+        <div id="stage" class="stage">
+          <canvas id="canvas"></canvas>
+          <canvas id="overlay"></canvas>
+        </div>
+
+        <div class="empty" id="empty">
+          <div class="drop crop-marks" id="drop">
+            <svg><use href="#i-image" /></svg>
+            <h1>Open an image to annotate</h1>
+            <p>Drop an image here, paste one with Ctrl+V, or choose a file.</p>
+            <button class="primary" id="choose-file">Choose image</button>
+            <input type="file" id="file" accept="image/*" hidden />
+          </div>
+        </div>
+        <p class="message" id="message"></p>
+      </main>
+    </div>
+
+    <dialog id="help">
+      <h2>Keyboard shortcuts</h2>
+      <div class="help-grid">
+        <section>
+          <h3>Tools</h3>
+          <dl>
+            <dt>Select and move</dt><dd><kbd>V</kbd></dd>
+            <dt>Pen</dt><dd><kbd>P</kbd></dd>
+            <dt>Highlighter</dt><dd><kbd>H</kbd></dd>
+            <dt>Line</dt><dd><kbd>L</kbd></dd>
+            <dt>Arrow</dt><dd><kbd>A</kbd></dd>
+            <dt>Rectangle</dt><dd><kbd>R</kbd></dd>
+            <dt>Ellipse</dt><dd><kbd>E</kbd></dd>
+            <dt>Numbered step</dt><dd><kbd>N</kbd></dd>
+            <dt>Text</dt><dd><kbd>T</kbd></dd>
+            <dt>Blur</dt><dd><kbd>B</kbd></dd>
+            <dt>Crop</dt><dd><kbd>C</kbd></dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Editing</h3>
+          <dl>
+            <dt>Undo / redo</dt><dd><kbd>Ctrl Z</kbd> / <kbd>Ctrl Shift Z</kbd></dd>
+            <dt>Delete selected</dt><dd><kbd>Del</kbd></dd>
+            <dt>Nudge selected</dt><dd><kbd>Arrows</kbd>, <kbd>Shift</kbd> for 10px</dd>
+            <dt>Edit text</dt><dd>Double-click it</dd>
+            <dt>New line in text</dt><dd><kbd>Shift Enter</kbd></dd>
+            <dt>Deselect</dt><dd><kbd>Esc</kbd></dd>
+          </dl>
+          <h3>View and save</h3>
+          <dl>
+            <dt>Zoom</dt><dd><kbd>Ctrl +</kbd> / <kbd>Ctrl −</kbd></dd>
+            <dt>Fit to window</dt><dd><kbd>Ctrl 0</kbd></dd>
+            <dt>Save (default format)</dt><dd><kbd>Ctrl S</kbd></dd>
+            <dt>Copy image</dt><dd><kbd>Ctrl C</kbd></dd>
+          </dl>
+        </section>
       </div>
-      <p id="message">Loading capture…</p>
-    </main>
+      <form method="dialog"><button class="primary">Done</button></form>
+    </dialog>
 
     <div id="toast" role="status" aria-live="polite"></div>
     <script src="editor.js" type="module"></script>
